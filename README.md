@@ -86,14 +86,6 @@ freezes. Only valid conversions are offered based on detected source formats.
 - PDF compress re-encodes the document (text becomes non-selectable); PDF→text
   extracts embedded text only (scanned pages need an OCR layer)
 
-## Development
-
-```bash
-python3 -m venv .venv && .venv/bin/pip install -e .
-.venv/bin/conveyr --list-formats
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
-```
-
 ## License
 
 Released under the **MIT License** — see [`LICENSE`](LICENSE).
