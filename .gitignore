@@ -6,6 +6,5 @@ dist/
 .venv/
 node_modules/
 web/.vite/
-web/
 .DS_Store
 *.log

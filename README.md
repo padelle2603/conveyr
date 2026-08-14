@@ -12,7 +12,7 @@ and openSUSE.
 
 A fully in-browser version (WebAssembly) runs at
 **https://padelle2603.github.io/conveyr/** — same conversions, nothing to
-install.
+install. Source lives in `web/`.
 
 ## Features
 
