@@ -302,11 +302,9 @@ python3 -m venv .venv
 PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
 ```
 
-## License and legal
+## License
 
 - Conveyr is released under the **MIT License** — see [`LICENSE`](LICENSE).
-- License and compliance details (dependency licenses, codec patents, GDPR,
-  copyright, trademark) are in [`LEGAL.md`](LEGAL.md).
 
 Please only convert content you have the rights to. Conveyr is fully offline
 and does not collect or transmit any data.

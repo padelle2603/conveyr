@@ -1,5 +1,4 @@
 include LICENSE
-include LEGAL.md
 include README.md
 include install.sh
 include uninstall.sh
