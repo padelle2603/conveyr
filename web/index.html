@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Conveyr Web - convert PDFs, images, video and audio directly in your browser. 100% local, nothing is ever uploaded."
+    />
+    <link rel="icon" type="image/png" href="./conveyr.png" />
+    <title>Conveyr Web - local file converter</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <img class="logo" src="./conveyr.png" alt="Conveyr" width="44" height="44" />
+          <div class="brand-text">
+            <h1>Conveyr <span class="web-badge">Web</span></h1>
+            <p>File converter &middot; runs entirely in your browser</p>
+          </div>
+        </div>
+        <div class="trust-badges">
+          <span class="badge">100% local</span>
+          <span class="badge">no uploads</span>
+          <span class="badge">WASM powered</span>
+        </div>
+      </header>
+
+      <nav class="tabs" role="tablist" aria-label="Tools">
+        <button class="tab is-active" id="tab-converter" role="tab" aria-selected="true" type="button">
+          Converter
+        </button>
+        <button class="tab" id="tab-pdf" role="tab" aria-selected="false" type="button">
+          PDF tools
+        </button>
+      </nav>
+
+      <main id="main"></main>
+
+      <footer class="foot">
+        <p>
+          Files never leave your device. Engine sources: <a href="https://ffmpeg.org" target="_blank" rel="noreferrer">FFmpeg</a>
+          &middot; <a href="https://imagemagick.org" target="_blank" rel="noreferrer">ImageMagick</a>
+          &middot; <a href="https://pdf-lib.js.org" target="_blank" rel="noreferrer">pdf-lib</a>
+          &middot; <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noreferrer">pdf.js</a>
+        </p>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

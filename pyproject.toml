@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conveyr"
+version = "1.0.0"
+description = "Conveyr - local file converter for images, video and audio on Linux. No cloud, no servers."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+keywords = ["converter", "conveyr", "ffmpeg", "imagemagick", "potrace", "local", "privacy", "offline"]
+classifiers = [
+    "Environment :: Console",
+    "Environment :: X11 Applications",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics :: Conversion",
+    "Topic :: Multimedia :: Sound/Audio :: Conversion",
+    "Topic :: Multimedia :: Video :: Conversion",
+]
+
+[project.scripts]
+conveyr = "conveyr.cli:main"
+conveyr-gui = "conveyr.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
