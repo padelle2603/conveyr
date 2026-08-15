@@ -281,14 +281,14 @@ function buildConverter(main: El, state: AppState): { root: El } {
   const root = h("section", { class: "panel" }, [
     h("h2", {}, ["Converter"]),
     h("p", { class: "subtitle" }, [
-      "Convert images, video and animated GIFs. Everything happens locally with WebAssembly.",
+      "Convert images, video, audio and animated GIFs. Everything happens locally with WebAssembly.",
     ]),
   ]);
   main.append(root);
 
   const drop = dropZone(
     "Drop files here or click to choose",
-    "Images, video and animated GIFs — files are never uploaded",
+    "Images, video, audio and animated GIFs — files are never uploaded",
     (files) => {
       void Promise.all(files.map(detectEntry)).then((entries) => {
         state.converter.entries = state.converter.entries.concat(entries);
@@ -367,6 +367,9 @@ function buildConverter(main: El, state: AppState): { root: El } {
     ) {
       optionsWrap.append(field("CRF", optNumber("CRF", 23, "0–51, empty = default", 0, 51)));
     }
+    if (cat === "audio" && categoryOf(target) === "audio") {
+      optionsWrap.append(field("Bitrate", optNumber("Bitrate", 192, "kbps, empty = default", 16, 320)));
+    }
   }
 
   targetSelect.addEventListener("change", () => {
@@ -432,6 +435,8 @@ function buildConverter(main: El, state: AppState): { root: El } {
     if (width !== undefined) opts.width = width;
     const crf = num("CRF");
     if (crf !== undefined) opts.crf = crf;
+    const bitrate = num("Bitrate");
+    if (bitrate !== undefined) opts.bitrate = bitrate;
     return opts;
   }
 

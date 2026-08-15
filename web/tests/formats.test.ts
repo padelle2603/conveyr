@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUDIO,
   CATEGORY,
   CATEGORY_LABELS,
   RASTER,
@@ -38,11 +39,14 @@ describe("categoryOf / isSupported", () => {
     expect(CATEGORY.svg).toBe("vector");
     expect(CATEGORY.gif).toBe("gif");
     expect(CATEGORY.mp4).toBe("video");
+    expect(CATEGORY.mp3).toBe("audio");
+    expect(CATEGORY.opus).toBe("audio");
   });
 
   it("knows category labels", () => {
     expect(CATEGORY_LABELS.image).toBe("Images");
     expect(CATEGORY_LABELS.video).toBe("Video");
+    expect(CATEGORY_LABELS.audio).toBe("Audio");
   });
 
   it("rejects unknown formats", () => {
@@ -72,6 +76,12 @@ describe("validTargets", () => {
     expect(validTargets("webm")).toEqual(["avi", "gif", "mkv", "mov", "mp4", "mpg"]);
   });
 
+  it("audio → audio, excluding self", () => {
+    expect(validTargets("mp3")).toEqual(["aac", "flac", "m4a", "ogg", "opus", "wav"]);
+    expect(validTargets("wav")).toEqual(["aac", "flac", "m4a", "mp3", "ogg", "opus"]);
+    expect(validTargets("ogg")).toEqual(["aac", "flac", "m4a", "mp3", "opus", "wav"]);
+  });
+
   it("unknown format has no targets", () => {
     expect(validTargets("docx")).toEqual([]);
   });
@@ -85,6 +95,10 @@ describe("listFormats", () => {
     expect(keys).toContain("svg");
     expect(keys).toContain("gif");
     expect(keys).toContain("mp4");
+    expect(keys).toContain("mp3");
+    expect(keys).toContain("flac");
+    expect(keys).toContain("ogg");
+    expect(keys).toContain("opus");
     for (const [ext, targets] of Object.entries(all)) {
       expect(targets.length, ext).toBeGreaterThan(0);
     }
@@ -120,11 +134,30 @@ describe("detect", () => {
   it("falls back to the extension for unsniffed formats", async () => {
     expect(await detect(fileOf("src.mp4"))).toBe("mp4");
   });
+  it("detects wav by magic bytes", async () => {
+    const head = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]);
+    expect(await detect(new File([head], "sound.bin"))).toBe("wav");
+  });
+  it("detects flac by magic bytes", async () => {
+    const head = new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0, 0, 0, 0x22]);
+    expect(await detect(new File([head], "sound.bin"))).toBe("flac");
+  });
+  it("detects ogg and opus by magic bytes", async () => {
+    const ogg = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73]);
+    expect(await detect(new File([ogg], "sound.bin"))).toBe("ogg");
+    const opus = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64]);
+    expect(await detect(new File([opus], "sound.bin"))).toBe("opus");
+  });
+  it("detects mp3 by ID3 tag", async () => {
+    const head = new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]);
+    expect(await detect(new File([head], "track.bin"))).toBe("mp3");
+  });
   it("returns undefined for unknown formats", async () => {
     expect(await detect(new File([new Uint8Array([1, 2, 3])], "file.xyz"))).toBeUndefined();
   });
   it("exposes the full CLI format set", () => {
     expect(RASTER).toContain("tiff");
     expect(VIDEO).toContain("mpg");
+    expect(AUDIO).toContain("opus");
   });
 });

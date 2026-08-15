@@ -1,7 +1,8 @@
 export const RASTER = ["jpg", "png", "webp", "bmp", "tiff"] as const;
 export const VECTOR = ["svg"] as const;
 export const VIDEO = ["mp4", "webm", "mkv", "avi", "mov", "mpg"] as const;
-export const ALL = [...RASTER, ...VECTOR, ...VIDEO, "gif"] as const;
+export const AUDIO = ["wav", "mp3", "flac", "ogg", "m4a", "aac", "opus"] as const;
+export const ALL = [...RASTER, ...VECTOR, ...VIDEO, ...AUDIO, "gif"] as const;
 
 export const ALIASES: Record<string, string> = {
   jpeg: "jpg",
@@ -10,9 +11,11 @@ export const ALIASES: Record<string, string> = {
   mpeg: "mpg",
   m4v: "mp4",
   mp4v: "mp4",
+  oga: "ogg",
+  m4b: "m4a",
 };
 
-export type Category = "image" | "vector" | "gif" | "video";
+export type Category = "image" | "vector" | "gif" | "video" | "audio";
 
 export const CATEGORY: Record<string, Category> = {
   jpg: "image",
@@ -28,6 +31,13 @@ export const CATEGORY: Record<string, Category> = {
   avi: "video",
   mov: "video",
   mpg: "video",
+  wav: "audio",
+  mp3: "audio",
+  flac: "audio",
+  ogg: "audio",
+  m4a: "audio",
+  aac: "audio",
+  opus: "audio",
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -35,6 +45,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   vector: "Vector graphics",
   gif: "Animated GIF",
   video: "Video",
+  audio: "Audio",
 };
 
 export function canonical(ext: string): string {
@@ -59,6 +70,7 @@ export function validTargets(srcExt: string): string[] {
   if (cat === "vector") return sorted([...RASTER, "gif"]);
   if (cat === "gif") return sorted([...RASTER, ...VIDEO]);
   if (cat === "video") return sorted([...VIDEO, "gif"].filter((e) => e !== srcExt));
+  if (cat === "audio") return sorted(AUDIO.filter((e) => e !== srcExt));
   return [];
 }
 
@@ -92,6 +104,16 @@ export async function detect(file: File): Promise<string | undefined> {
   if (head[0] === 0x42 && head[1] === 0x4d) return "bmp";
   if (head[0] === 0x49 && head[1] === 0x49 && head[2] === 0x2a && head[3] === 0x00) return "tiff";
   if (head[0] === 0x4d && head[1] === 0x4d && head[2] === 0x00 && head[3] === 0x2a) return "tiff";
+  if (head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 &&
+    head[8] === 0x57 && head[9] === 0x41 && head[10] === 0x56 && head[11] === 0x45) {
+    return "wav";
+  }
+  if (head[0] === 0x66 && head[1] === 0x4c && head[2] === 0x61 && head[3] === 0x43) return "flac";
+  if (head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53) {
+    const ogg = new TextDecoder("utf-8", { fatal: false }).decode(head.slice(0, 64));
+    return ogg.includes("OpusHead") ? "opus" : "ogg";
+  }
+  if (head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) return "mp3";
 
   const lowered = new TextDecoder("utf-8", { fatal: false }).decode(head).toLowerCase();
   if (lowered.includes("<svg") || (lowered.trimStart().startsWith("<?xml") && lowered.includes("<svg"))) {
@@ -116,4 +138,11 @@ export const MIME: Record<string, string> = {
   avi: "video/x-msvideo",
   mov: "video/quicktime",
   mpg: "video/mpeg",
+  wav: "audio/wav",
+  mp3: "audio/mpeg",
+  flac: "audio/flac",
+  ogg: "audio/ogg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  opus: "audio/opus",
 };

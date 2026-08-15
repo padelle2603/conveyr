@@ -10,6 +10,7 @@ export interface ConvertOptions {
   width?: number;
   crf?: number;
   threshold?: number;
+  bitrate?: number;
   onLog?: FFmpegLog;
 }
 
@@ -69,6 +70,36 @@ async function videoToVideo(file: Blob, target: string, opts: ConvertOptions): P
   return new Blob([toAB(data.data)], { type: MIME[target] });
 }
 
+const AUDIO_CODECS: Record<string, { a: string; vqscale?: string; defaultBitrate?: string }> = {
+  wav: { a: "pcm_s16le" },
+  mp3: { a: "libmp3lame", vqscale: "2" },
+  flac: { a: "flac" },
+  ogg: { a: "libvorbis", vqscale: "4" },
+  m4a: { a: "aac", defaultBitrate: "192k" },
+  aac: { a: "aac", defaultBitrate: "192k" },
+  opus: { a: "libopus", defaultBitrate: "128k" },
+};
+
+async function audioToAudio(file: Blob, target: string, opts: ConvertOptions): Promise<Blob> {
+  const codec = AUDIO_CODECS[target];
+  if (!codec) throw new Error(`Unsupported target: ${target}`);
+  const bitrate = opts.bitrate !== undefined ? `${Math.round(opts.bitrate)}k` : undefined;
+  const args = ["-vn"];
+  if (codec.a === "libmp3lame" || codec.a === "libvorbis") {
+    args.push("-c:a", codec.a);
+    if (bitrate) args.push("-b:a", bitrate);
+    else if (codec.vqscale) args.push("-qscale:a", codec.vqscale);
+  } else if (codec.a === "pcm_s16le" || codec.a === "flac") {
+    args.push("-c:a", codec.a);
+  } else {
+    args.push("-c:a", codec.a, "-b:a", bitrate ?? codec.defaultBitrate!);
+  }
+  const { files } = await runFFmpeg(file, args, [`out.${target}`], opts.onLog);
+  const data = files.find((f) => f.name === `out.${target}`);
+  if (!data) throw new Error(`ffmpeg produced no output for ${target}`);
+  return new Blob([toAB(data.data)], { type: MIME[target] });
+}
+
 export async function convertFile(
   file: Blob,
   srcExt: string,
@@ -98,6 +129,7 @@ export async function convertFile(
   if (srcCat === "gif" && tgtCat === "video") return gifToVideo(file, target, opts);
   if (srcCat === "video" && target === "gif") return videoToGif(file, opts);
   if (srcCat === "video" && tgtCat === "video") return videoToVideo(file, target, opts);
+  if (srcCat === "audio" && tgtCat === "audio") return audioToAudio(file, target, opts);
 
   throw new Error(`No conversion path from ${srcExt} to ${target}`);
 }
