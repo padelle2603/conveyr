@@ -1,7 +1,7 @@
 """Video tools tab for the Conveyr GUI.
 
-A small set of local video operations (currently Trim/cut) that run 100%
-locally via ffmpeg.
+A set of local video operations (trim, crop, rotate, resize, speed, mute,
+extract audio/frame) that run 100% locally via ffmpeg.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 
 from .video import (
+    ROTATE_ANGLES,
     is_video,
     run_tool,
 )
@@ -21,12 +22,52 @@ from .theme import C, _FONT, _STATUS_STYLES
 
 _EMPTY_STATE_TEXT = (
     "No files yet\n\n"
-    "Add a video to trim it.\n"
+    "Add a video to use the video tools.\n"
     "Everything stays on this machine."
 )
 
+_ROTATE_TOKENS = {a: a for a in ROTATE_ANGLES}
+
+# Per-tool option specification: (key, label, kind, default)
+#   kind: "text" | "int" | "angle" | "check"
+_TOOL_OPTIONS: dict[str, list[tuple[str, str, str, str]]] = {
+    "trim": [
+        ("start", "Start (s or HH:MM:SS)", "text", "0"),
+        ("duration", "Duration (s or HH:MM:SS)", "text", ""),
+    ],
+    "crop": [
+        ("x", "X offset (px)", "int", "0"),
+        ("y", "Y offset (px)", "int", "0"),
+        ("width", "Width (px)", "int", ""),
+        ("height", "Height (px)", "int", ""),
+    ],
+    "rotate": [
+        ("angle", "Angle", "angle", "90"),
+        ("flip_h", "Flip horizontally", "check", ""),
+        ("flip_v", "Flip vertically", "check", ""),
+    ],
+    "resize": [
+        ("width", "Width (px)", "int", ""),
+    ],
+    "speed": [
+        ("factor", "Speed factor (0.25-4)", "text", "2"),
+    ],
+    "mute": [],
+    "extract-audio": [],
+    "extract-frame": [
+        ("time", "Time (s or HH:MM:SS)", "text", "0"),
+    ],
+}
+
 _HINTS = {
     "trim": "Cut a portion of the video by start time and duration (fast, lossless).",
+    "crop": "Crop the video to a rectangle defined by offset and size.",
+    "rotate": "Rotate the video 90/180/270 degrees and optionally flip it.",
+    "resize": "Scale the video to a target width, keeping the aspect ratio.",
+    "speed": "Speed up (factor > 1) or slow down (factor < 1) playback.",
+    "mute": "Remove the audio track, keeping the video as-is.",
+    "extract-audio": "Save the audio track as its own audio file.",
+    "extract-frame": "Grab a single image snapshot at the given timestamp.",
 }
 
 
@@ -35,6 +76,13 @@ class VideoToolsView(ttk.Frame):
 
     TOOLS = [
         ("trim", "Trim video"),
+        ("crop", "Crop video"),
+        ("rotate", "Rotate / flip"),
+        ("resize", "Resize video"),
+        ("speed", "Change speed"),
+        ("mute", "Mute (remove audio)"),
+        ("extract-audio", "Extract audio"),
+        ("extract-frame", "Extract frame"),
     ]
     TOOL_NAMES = {key: label for key, label in TOOLS}
     KEY_BY_LABEL = {label: key for key, label in TOOLS}
@@ -45,9 +93,8 @@ class VideoToolsView(ttk.Frame):
         self.tool = tk.StringVar(value="Trim video")
         self.output_dir = tk.StringVar(value="")
         self.force = tk.BooleanVar(value=False)
-        self.start = tk.StringVar(value="0")
-        self.duration = tk.StringVar(value="")
         self.clear_on_switch = tk.BooleanVar(value=True)
+        self.option_vars: dict[str, tk.Variable] = {}
         self.queue: "queue.Queue[tuple]" = queue.Queue()
         self.busy = False
 
@@ -147,20 +194,12 @@ class VideoToolsView(ttk.Frame):
         panel = ttk.Labelframe(self, text="Options", style="Panel.TLabelframe", padding=(10, 8))
         panel.grid(row=2, column=0, sticky="ew", pady=(0, 8))
         panel.columnconfigure(1, weight=1)
+        self.options_panel = panel
 
-        self.start_lbl, self.start_ent = self._option_entry(
-            panel, 0, "Start (s or HH:MM:SS):", self.start
-        )
-        self.dur_lbl, self.dur_ent = self._option_entry(
-            panel, 1, "Duration (s or HH:MM:SS):", self.duration
-        )
-
-    def _option_entry(self, panel, row, label, var) -> tuple[ttk.Label, ttk.Entry]:
-        lbl = ttk.Label(panel, text=label, style="Muted.TLabel")
-        lbl.grid(row=row, column=0, sticky="w", padx=(0, 8), pady=2)
-        ent = ttk.Entry(panel, textvariable=var, width=18)
-        ent.grid(row=row, column=1, sticky="w", pady=2)
-        return lbl, ent
+    def _clear_option_widgets(self) -> None:
+        for child in list(self.options_panel.children.values()):
+            child.destroy()
+        self.option_vars.clear()
 
     def _build_output(self) -> None:
         row = ttk.Frame(self)
@@ -272,6 +311,31 @@ class VideoToolsView(ttk.Frame):
     def _refresh_options(self) -> None:
         tool = self._current_tool()
         self.hint.config(text=_HINTS.get(tool, ""))
+        self._clear_option_widgets()
+
+        for key, label, kind, default in _TOOL_OPTIONS.get(tool, []):
+            var: tk.Variable
+            if kind == "check":
+                var = tk.BooleanVar(value=False)
+            elif kind == "angle":
+                var = tk.StringVar(value=default or "90")
+            else:
+                var = tk.StringVar(value=default)
+
+            ttk.Label(self.options_panel, text=label, style="Muted.TLabel").grid(
+                row=len(self.option_vars), column=0, sticky="w", padx=(0, 8), pady=2
+            )
+            if kind == "angle":
+                widget = ttk.Combobox(
+                    self.options_panel, textvariable=var, state="readonly", width=10
+                )
+                widget["values"] = [a for a in ROTATE_ANGLES]
+            elif kind == "check":
+                widget = ttk.Checkbutton(self.options_panel, variable=var)
+            else:
+                widget = ttk.Entry(self.options_panel, textvariable=var, width=18)
+            widget.grid(row=len(self.option_vars), column=1, sticky="w", pady=2)
+            self.option_vars[key] = var
 
     def _on_tool_changed(self, _event=None) -> None:
         self._refresh_options()
@@ -282,13 +346,11 @@ class VideoToolsView(ttk.Frame):
             self._status(f"Files cleared for {self.TOOL_NAMES[self._current_tool()]}.", "muted")
 
     def _compatible(self, tool: str, paths: list[str]) -> bool:
-        if tool != "trim":
-            return False
         return len(paths) == 1 and is_video(paths[0])
 
     def _incompat_message(self, tool: str, paths: list[str]) -> str:
         if len(paths) != 1:
-            return "Trim works on a single video file."
+            return "Video tools work on a single video file."
         return f"{Path(paths[0]).name}: not a supported video file."
 
     def _browse_output(self) -> None:
@@ -300,12 +362,18 @@ class VideoToolsView(ttk.Frame):
 
     # -------------------------------------------------------------- actions --
     def _gather_opts(self) -> dict:
-        return {
+        opts: dict = {
             "force": self.force.get(),
             "quiet": False,
-            "start": self.start.get().strip(),
-            "duration": self.duration.get().strip(),
         }
+        for key, var in self.option_vars.items():
+            if isinstance(var, tk.BooleanVar):
+                opts[key] = var.get()
+            else:
+                value = var.get().strip()
+                if value != "":
+                    opts[key] = value
+        return opts
 
     def _run(self) -> None:
         if self.busy:

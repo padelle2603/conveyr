@@ -15,11 +15,13 @@ import {
 } from "./tools/pdftools";
 import {
   VIDEO_TOOLS,
+  VIDEO_TOOL_FIELDS,
   VIDEO_TOOL_HINTS,
   VIDEO_TOOL_LABELS,
   isVideoName,
   runVideoTool,
   type VideoTool,
+  type VideoToolField,
 } from "./tools/videotools";
 
 type El = HTMLElement;
@@ -650,15 +652,8 @@ function buildVideo(main: El, state: AppState): { root: El } {
     }
 
     optionsWrap.textContent = "";
-    if (tool === "trim") {
-      const startInput = h("input", { type: "text", class: "opt", placeholder: "0" }) as HTMLInputElement;
-      startInput.dataset.opt = "start";
-      const durInput = h("input", { type: "text", class: "opt", placeholder: "e.g. 30" }) as HTMLInputElement;
-      durInput.dataset.opt = "duration";
-      optionsWrap.append(
-        field("Start (s or HH:MM:SS)", startInput),
-        field("Duration (s or HH:MM:SS)", durInput),
-      );
+    for (const f of VIDEO_TOOL_FIELDS[tool]) {
+      optionsWrap.append(field(f.label, buildVideoField(f)));
     }
 
     status.hide();
@@ -666,12 +661,43 @@ function buildVideo(main: El, state: AppState): { root: El } {
     results.hide();
   }
 
-  function collectVideoOptions(): { start: string; duration: string } {
-    const opt = (label: string): string => {
-      const input = optionsWrap.querySelector(`input[data-opt="${label}"]`) as HTMLInputElement | null;
-      return input ? input.value.trim() : "";
-    };
-    return { start: opt("start"), duration: opt("duration") };
+  function buildVideoField(f: VideoToolField): HTMLElement {
+    if (f.type === "angle") {
+      const sel = h("select") as HTMLSelectElement;
+      for (const a of ["90", "180", "270"]) sel.append(h("option", { value: a }, [a + "°"]));
+      sel.value = f.default ?? "90";
+      sel.dataset.opt = f.key;
+      return sel;
+    }
+    if (f.type === "check") {
+      const wrap = h("label", { class: "check-field" }, []);
+      const cb = h("input", { type: "checkbox" }) as HTMLInputElement;
+      cb.dataset.opt = f.key;
+      wrap.append(cb);
+      return wrap;
+    }
+    const input = h("input", {
+      type: "text", class: "opt", placeholder: f.placeholder ?? "",
+    }) as HTMLInputElement;
+    input.dataset.opt = f.key;
+    if (f.default) input.value = f.default;
+    return input;
+  }
+
+  function collectVideoOptions(): Record<string, string | boolean> {
+    const opts: Record<string, string | boolean> = {};
+    for (const f of VIDEO_TOOL_FIELDS[state.video.tool]) {
+      const input = optionsWrap.querySelector(`[data-opt="${f.key}"]`) as
+        (HTMLInputElement | HTMLSelectElement | null);
+      if (!input) continue;
+      if (f.type === "check") {
+        opts[f.key] = (input as HTMLInputElement).checked;
+      } else {
+        const v = input.value.trim();
+        if (v !== "") opts[f.key] = v;
+      }
+    }
+    return opts;
   }
 
   toolSelect.addEventListener("change", () => {
@@ -695,8 +721,7 @@ function buildVideo(main: El, state: AppState): { root: El } {
     try {
       const o = collectVideoOptions();
       const outputs = await runVideoTool(tool, files, {
-        start: o.start,
-        duration: o.duration,
+        ...o,
         onLog: (line) => log.dim(line),
       });
       status.ok(`Done — ${outputs.length} file${outputs.length > 1 ? "s" : ""} ready`);

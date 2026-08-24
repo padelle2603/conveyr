@@ -235,6 +235,16 @@ input[type="checkbox"] {
   color: var(--text-dim);
 }
 
+.check-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.check-field input[type="checkbox"] {
+  margin: 0;
+}
+
 .dropzone {
   border: 2px dashed var(--border);
   border-radius: var(--radius);

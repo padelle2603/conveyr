@@ -23,7 +23,7 @@ from .pdf import (
     ROTATE_ANGLES,
     run_tool,
 )
-from .video import run_tool as run_video_tool
+from .video import ROTATE_ANGLES, run_tool as run_video_tool
 
 BANNER = r"""
    ____                            __
@@ -256,23 +256,52 @@ def _build_video_parser() -> argparse.ArgumentParser:
         prog="conveyr video",
         description=(
             "Video tools for Conveyr - everything runs locally.\n"
-            "Available: trim"
+            "Available: trim, crop, rotate, resize, speed, mute, "
+            "extract-audio, extract-frame"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="tool", required=True, metavar="TOOL")
 
+    def add_file(sp: argparse.ArgumentParser) -> None:
+        _add_video_common(sp)
+        sp.add_argument("file", metavar="VIDEO")
+
     trim = sub.add_parser("trim", help="cut a portion of a video (fast, lossless)")
-    _add_video_common(trim)
-    trim.add_argument("file", metavar="VIDEO")
-    trim.add_argument(
-        "--start", default="0",
-        help="start time in seconds or HH:MM:SS (default: 0)",
-    )
-    trim.add_argument(
-        "--duration", default="0",
-        help="duration in seconds or HH:MM:SS (must be > 0)",
-    )
+    add_file(trim)
+    trim.add_argument("--start", default="0", help="start time in seconds or HH:MM:SS (default: 0)")
+    trim.add_argument("--duration", default="0", help="duration in seconds or HH:MM:SS (must be > 0)")
+
+    crop = sub.add_parser("crop", help="crop to a rectangle (x, y, width, height)")
+    add_file(crop)
+    crop.add_argument("--x", type=int, default=0, help="left offset in pixels")
+    crop.add_argument("--y", type=int, default=0, help="top offset in pixels")
+    crop.add_argument("--width", type=int, required=True, help="crop width in pixels")
+    crop.add_argument("--height", type=int, required=True, help="crop height in pixels")
+
+    rotate = sub.add_parser("rotate", help="rotate 90/180/270 and optionally flip")
+    add_file(rotate)
+    rotate.add_argument("--angle", choices=ROTATE_ANGLES, default="90", help="rotation (default: 90)")
+    rotate.add_argument("--flip-h", action="store_true", help="flip horizontally")
+    rotate.add_argument("--flip-v", action="store_true", help="flip vertically")
+
+    resize = sub.add_parser("resize", help="scale to a target width (aspect preserved)")
+    add_file(resize)
+    resize.add_argument("--width", type=int, required=True, help="target width in pixels")
+
+    speed = sub.add_parser("speed", help="change playback speed (e.g. 2 = faster)")
+    add_file(speed)
+    speed.add_argument("--factor", type=float, required=True, help="speed factor (0.25-4)")
+
+    mute = sub.add_parser("mute", help="remove the audio track")
+    add_file(mute)
+
+    extract_audio = sub.add_parser("extract-audio", help="save the audio as a file")
+    add_file(extract_audio)
+
+    extract_frame = sub.add_parser("extract-frame", help="grab a single snapshot image")
+    add_file(extract_frame)
+    extract_frame.add_argument("--time", default="0", help="timestamp in seconds or HH:MM:SS (default: 0)")
 
     return parser
 
@@ -298,8 +327,17 @@ def _video_main(argv: list[str]) -> int:
     opts = {
         "force": args.force,
         "quiet": args.quiet,
-        "start": args.start,
-        "duration": args.duration,
+        "start": getattr(args, "start", None),
+        "duration": getattr(args, "duration", None),
+        "x": getattr(args, "x", None),
+        "y": getattr(args, "y", None),
+        "width": getattr(args, "width", None),
+        "height": getattr(args, "height", None),
+        "angle": getattr(args, "angle", None),
+        "flip_h": getattr(args, "flip_h", False),
+        "flip_v": getattr(args, "flip_v", False),
+        "factor": getattr(args, "factor", None),
+        "time": getattr(args, "time", None),
     }
 
     try:
