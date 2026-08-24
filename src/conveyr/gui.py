@@ -19,10 +19,12 @@ from tkinter import filedialog, messagebox, ttk
 from . import __version__
 from .core import (
     convert,
+    DEFAULT_QUALITY,
     detect,
     valid_targets,
 )
 from .pdfgui import PdfToolsView
+from .videogui import VideoToolsView
 from .picker import pick_directory, pick_files
 from .theme import C, _FONT, _STATUS_STYLES, setup_theme
 
@@ -77,6 +79,7 @@ class ConverterApp:
         self.files: list[tuple[str, str]] = []  # (path, detected_format)
         self.target = tk.StringVar()
         self.force = tk.BooleanVar(value=False)
+        self.quality = tk.IntVar(value=DEFAULT_QUALITY)
         self.output_dir = tk.StringVar(value="")
         self.queue: "queue.Queue[tuple]" = queue.Queue()
         self.busy = False
@@ -110,6 +113,9 @@ class ConverterApp:
 
         self.pdf_view = PdfToolsView(notebook)
         notebook.add(self.pdf_view, text="PDF tools")
+
+        self.video_view = VideoToolsView(notebook)
+        notebook.add(self.video_view, text="Video tools")
 
     def _build_header(self, main: ttk.Frame) -> None:
         header = ttk.Frame(main)
@@ -209,6 +215,25 @@ class ConverterApp:
             panel, text="Overwrite existing files", variable=self.force
         )
         self.force_check.grid(row=1, column=2, sticky="e", padx=(12, 0))
+
+        ttk.Label(panel, text="Quality", style="Muted.TLabel").grid(
+            row=2, column=0, sticky="w", padx=(0, 8), pady=(8, 0)
+        )
+        quality_row = ttk.Frame(panel)
+        quality_row.grid(row=2, column=1, columnspan=2, sticky="ew", pady=(8, 0))
+        quality_row.columnconfigure(0, weight=1)
+        self.quality_scale = ttk.Scale(
+            quality_row, from_=1, to=100, orient=tk.HORIZONTAL,
+            variable=self.quality, command=self._on_quality,
+        )
+        self.quality_scale.grid(row=0, column=0, sticky="ew")
+        self.quality_label = ttk.Label(
+            quality_row, text=f"{DEFAULT_QUALITY}", style="Faint.TLabel", width=4
+        )
+        self.quality_label.grid(row=0, column=1, sticky="w", padx=(8, 0))
+
+    def _on_quality(self, _value=None) -> None:
+        self.quality_label.config(text=str(self.quality.get()))
 
     def _build_output(self, main: ttk.Frame) -> None:
         row = ttk.Frame(main)
@@ -359,6 +384,7 @@ class ConverterApp:
             "out_dir": self.output_dir.get().strip() or None,
             "force": self.force.get(),
             "quiet": False,
+            "quality": self.quality.get(),
         }
 
     def _start_conversion(self) -> None:
@@ -445,7 +471,11 @@ class ConverterApp:
         self.log.config(state=tk.DISABLED)
 
     def _on_close(self) -> None:
-        if self.busy or getattr(self, "pdf_view", None) and self.pdf_view.busy:
+        busy_views = [
+            getattr(self, "pdf_view", None),
+            getattr(self, "video_view", None),
+        ]
+        if self.busy or any(getattr(v, "busy", False) for v in busy_views):
             messagebox.showinfo("Conveyr", "Please wait for the current operation to finish.")
             return
         self.root.destroy()

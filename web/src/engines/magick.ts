@@ -45,11 +45,20 @@ export function initMagick(): Promise<void> {
   return initPromise;
 }
 
-export async function magickConvert(input: Uint8Array, target: string): Promise<Uint8Array> {
+export async function magickConvert(
+  input: Uint8Array,
+  target: string,
+  quality?: number,
+): Promise<Uint8Array> {
   await initMagick();
   const fmt = FORMAT[target];
   if (!fmt) throw new Error(`Unsupported target format: ${target}`);
-  return ImageMagick.read(input, (image) => image.write(fmt, (data) => data));
+  return ImageMagick.read(input, (image) => {
+    if (quality !== undefined && (target === "jpg" || target === "webp")) {
+      image.quality = Math.max(1, Math.min(100, Math.round(quality)));
+    }
+    return image.write(fmt, (data) => data);
+  });
 }
 
 export async function magickThresholdGray(

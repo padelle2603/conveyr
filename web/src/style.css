@@ -214,6 +214,27 @@ input[type="checkbox"] {
   gap: 8px;
 }
 
+.range-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.range-field input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.opt-value {
+  min-width: 2.5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
 .dropzone {
   border: 2px dashed var(--border);
   border-radius: var(--radius);

@@ -11,6 +11,7 @@ from .backends import BackendError
 from .core import (
     CATEGORY,
     CATEGORY_LABELS,
+    DEFAULT_QUALITY,
     convert,
     detect,
     list_formats,
@@ -22,6 +23,7 @@ from .pdf import (
     ROTATE_ANGLES,
     run_tool,
 )
+from .video import run_tool as run_video_tool
 
 BANNER = r"""
    ____                            __
@@ -45,7 +47,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "  conveyr anim.gif --to mp4\n"
             "  conveyr video.mp4 --to gif --fps 12 --width 640\n"
             "  conveyr sound.wav --to mp3 --bitrate 192\n"
-            "  conveyr *.jpg --to webp --out-dir converted/"
+            "  conveyr clip.mp4 --to webm --quality 90\n"
+            "  conveyr *.jpg --to webp --quality 85 --out-dir converted/\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -88,6 +91,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--threshold", type=int, default=50,
         help="black/white threshold in %% for raster-to-SVG tracing (default 50)",
+    )
+    parser.add_argument(
+        "--quality", type=int, default=DEFAULT_QUALITY,
+        help=f"output quality 1-100 for lossy targets, higher is better (default {DEFAULT_QUALITY})",
     )
     parser.add_argument(
         "--list-formats", action="store_true", help="show all supported conversions and exit"
@@ -239,10 +246,78 @@ def _pdf_main(argv: list[str]) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# Video tools (conveyr video ...)
+# --------------------------------------------------------------------------- #
+
+
+def _build_video_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="conveyr video",
+        description=(
+            "Video tools for Conveyr - everything runs locally.\n"
+            "Available: trim"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="tool", required=True, metavar="TOOL")
+
+    trim = sub.add_parser("trim", help="cut a portion of a video (fast, lossless)")
+    _add_video_common(trim)
+    trim.add_argument("file", metavar="VIDEO")
+    trim.add_argument(
+        "--start", default="0",
+        help="start time in seconds or HH:MM:SS (default: 0)",
+    )
+    trim.add_argument(
+        "--duration", default="0",
+        help="duration in seconds or HH:MM:SS (must be > 0)",
+    )
+
+    return parser
+
+
+def _add_video_common(sp: argparse.ArgumentParser) -> None:
+    sp.add_argument("-o", "--output", metavar="PATH", help="output file path")
+    sp.add_argument(
+        "-d", "--out-dir", metavar="DIR",
+        help="directory for output files (default: input directory)",
+    )
+    sp.add_argument(
+        "-f", "--force", action="store_true", help="overwrite existing output files"
+    )
+    sp.add_argument(
+        "-q", "--quiet", action="store_true", help="print only the output paths"
+    )
+
+
+def _video_main(argv: list[str]) -> int:
+    parser = _build_video_parser()
+    args = parser.parse_args(argv)
+
+    opts = {
+        "force": args.force,
+        "quiet": args.quiet,
+        "start": args.start,
+        "duration": args.duration,
+    }
+
+    try:
+        result = run_video_tool(args.tool, [args.file], args.output, args.out_dir, opts)
+    except (BackendError, ValueError, OSError, FileExistsError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print(result)
+    return 0
+
+
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "pdf":
         return _pdf_main(argv[1:])
+    if argv and argv[0] == "video":
+        return _video_main(argv[1:])
 
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -300,6 +375,7 @@ def main(argv=None) -> int:
             "fps": args.fps,
             "width": args.width,
             "threshold": args.threshold,
+            "quality": args.quality,
         }
 
         try:

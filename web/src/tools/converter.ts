@@ -5,13 +5,36 @@ import { magickConvert, magickThresholdGray } from "../engines/magick";
 import { rasterToSvg } from "../engines/potrace";
 import { svgToRaster } from "../engines/svg";
 
+export const DEFAULT_QUALITY = 80;
+
 export interface ConvertOptions {
+  quality?: number;
   fps?: number;
   width?: number;
   crf?: number;
   threshold?: number;
   bitrate?: number;
   onLog?: FFmpegLog;
+}
+
+function clampQuality(value: number | undefined): number {
+  if (value === undefined || Number.isNaN(value)) return DEFAULT_QUALITY;
+  return Math.max(1, Math.min(100, Math.round(value)));
+}
+
+function qualityToCrf(value: number): number {
+  return Math.max(17, Math.min(51, Math.round(51 - 0.33 * clampQuality(value))));
+}
+
+function qualityToBitrate(value: number): number {
+  return Math.max(64, Math.min(320, Math.round(64 + 2.56 * clampQuality(value))));
+}
+
+function qualityToGif(value: number): [number, number] {
+  const q = clampQuality(value);
+  const fps = Math.max(1, Math.min(30, Math.round(5 + 0.25 * q)));
+  const width = Math.max(160, Math.min(1280, Math.round(360 + 4.8 * q)));
+  return [fps, width];
 }
 
 const GIF_VIDEO_ARGS: Record<string, string[]> = {
@@ -34,7 +57,10 @@ const VIDEO_CODECS: Record<string, { v: string; a: string; vextra: string[] }> =
 
 async function gifToVideo(file: Blob, target: string, opts: ConvertOptions): Promise<Blob> {
   const args = [...GIF_VIDEO_ARGS[target]];
-  if (target === "webm") args.push("-crf", String(opts.crf ?? 31));
+  if (target === "webm") {
+    const crf = opts.crf ?? (opts.quality !== undefined ? qualityToCrf(opts.quality) : 31);
+    args.push("-crf", String(crf));
+  }
   const { files } = await runFFmpeg(file, args, [`out.${target}`], opts.onLog);
   const data = files.find((f) => f.name === `out.${target}`);
   if (!data) throw new Error(`ffmpeg produced no output for ${target}`);
@@ -42,8 +68,14 @@ async function gifToVideo(file: Blob, target: string, opts: ConvertOptions): Pro
 }
 
 async function videoToGif(file: Blob, opts: ConvertOptions): Promise<Blob> {
-  let fps = Math.round(opts.fps ?? 10);
-  let width = Math.round(opts.width ?? 480);
+  let fps: number;
+  let width: number;
+  if (opts.quality !== undefined) {
+    [fps, width] = qualityToGif(opts.quality);
+  } else {
+    fps = Math.round(opts.fps ?? 10);
+    width = Math.round(opts.width ?? 480);
+  }
   if (fps < 1 || fps > 60) fps = 10;
   if (width < 16 || width > 10000) width = 480;
   const vf =
@@ -59,7 +91,7 @@ async function videoToVideo(file: Blob, target: string, opts: ConvertOptions): P
   const codec = VIDEO_CODECS[target];
   if (!codec) throw new Error(`Unsupported target: ${target}`);
   const args = ["-c:v", codec.v];
-  const crf = opts.crf;
+  const crf = opts.crf ?? (opts.quality !== undefined ? qualityToCrf(opts.quality) : undefined);
   if (crf !== undefined && (codec.v === "libx264" || codec.v === "libvpx-vp9")) {
     args.push("-crf", String(Math.round(crf)));
   }
@@ -83,7 +115,9 @@ const AUDIO_CODECS: Record<string, { a: string; vqscale?: string; defaultBitrate
 async function audioToAudio(file: Blob, target: string, opts: ConvertOptions): Promise<Blob> {
   const codec = AUDIO_CODECS[target];
   if (!codec) throw new Error(`Unsupported target: ${target}`);
-  const bitrate = opts.bitrate !== undefined ? `${Math.round(opts.bitrate)}k` : undefined;
+  let bitrate: string | undefined;
+  if (opts.bitrate !== undefined) bitrate = `${Math.round(opts.bitrate)}k`;
+  else if (opts.quality !== undefined) bitrate = `${qualityToBitrate(opts.quality)}k`;
   const args = ["-vn"];
   if (codec.a === "libmp3lame" || codec.a === "libvorbis") {
     args.push("-c:a", codec.a);
@@ -123,7 +157,9 @@ export async function convertFile(
   }
   if (tgtCat === "image" || target === "gif") {
     const input = new Uint8Array(await file.arrayBuffer());
-    const data = await magickConvert(input, target);
+    const quality =
+      target === "jpg" || target === "webp" ? clampQuality(opts.quality) : undefined;
+    const data = await magickConvert(input, target, quality);
     return new Blob([toAB(data)], { type: MIME[target] });
   }
   if (srcCat === "gif" && tgtCat === "video") return gifToVideo(file, target, opts);

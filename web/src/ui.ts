@@ -1,6 +1,6 @@
 import { categoryOf, CATEGORY_LABELS, canonical, detect, validTargets } from "./formats";
 import { OutFile, downloadAll, downloadBlob, formatBytes, stem } from "./download";
-import { convertFile, type ConvertOptions } from "./tools/converter";
+import { convertFile, DEFAULT_QUALITY, type ConvertOptions } from "./tools/converter";
 import {
   COMPRESS_PRESETS,
   PDF_TOOLS,
@@ -13,6 +13,14 @@ import {
   runPdfTool,
   type PdfTool,
 } from "./tools/pdftools";
+import {
+  VIDEO_TOOLS,
+  VIDEO_TOOL_HINTS,
+  VIDEO_TOOL_LABELS,
+  isVideoName,
+  runVideoTool,
+  type VideoTool,
+} from "./tools/videotools";
 
 type El = HTMLElement;
 
@@ -142,9 +150,15 @@ interface PdfState {
 }
 
 interface AppState {
-  tab: "converter" | "pdf";
+  tab: "converter" | "pdf" | "video";
   converter: ConverterState;
   pdf: PdfState;
+  video: VideoState;
+}
+
+interface VideoState {
+  files: File[];
+  tool: VideoTool;
 }
 
 function fileExt(file: File): string {
@@ -238,6 +252,23 @@ function optNumber(label: string, defaultValue: number, placeholder: string, min
   return input;
 }
 
+function optRange(label: string, defaultValue: number): { wrap: El; input: HTMLInputElement; value: HTMLElement } {
+  const input = h("input", {
+    type: "range", class: "opt-range", min: "1", max: "100", value: defaultValue,
+  }) as HTMLInputElement;
+  input.dataset.opt = label;
+  const value = h("span", { class: "opt-value" }, [String(defaultValue)]);
+  input.addEventListener("input", () => {
+    value.textContent = input.value;
+  });
+  const wrap = h("div", { class: "field range-field" }, [
+    h("span", {}, [label]),
+    input,
+    value,
+  ]);
+  return { wrap, input, value };
+}
+
 function optSelect(label: string, options: [string, string][]): HTMLSelectElement {
   const select = h("select") as HTMLSelectElement;
   select.dataset.opt = label;
@@ -259,21 +290,26 @@ export function renderApp(): void {
     tab: "converter",
     converter: { entries: [], target: "" },
     pdf: { files: [], tool: "merge" },
+    video: { files: [], tool: "trim" },
   };
 
   const converterPanel = buildConverter(main, state);
   const pdfPanel = buildPdf(main, state);
+  const videoPanel = buildVideo(main, state);
 
-  const showTab = (tab: "converter" | "pdf"): void => {
+  const showTab = (tab: "converter" | "pdf" | "video"): void => {
     state.tab = tab;
     converterPanel.root.classList.toggle("hidden", tab !== "converter");
     pdfPanel.root.classList.toggle("hidden", tab !== "pdf");
+    videoPanel.root.classList.toggle("hidden", tab !== "video");
     document.getElementById("tab-converter")?.classList.toggle("is-active", tab === "converter");
     document.getElementById("tab-pdf")?.classList.toggle("is-active", tab === "pdf");
+    document.getElementById("tab-video")?.classList.toggle("is-active", tab === "video");
   };
 
   document.getElementById("tab-converter")?.addEventListener("click", () => showTab("converter"));
   document.getElementById("tab-pdf")?.addEventListener("click", () => showTab("pdf"));
+  document.getElementById("tab-video")?.addEventListener("click", () => showTab("video"));
   showTab("converter");
 }
 
@@ -349,27 +385,15 @@ function buildConverter(main: El, state: AppState): { root: El } {
     optionsWrap.textContent = "";
     const target = state.converter.target;
     const ext = state.converter.entries[0]?.ext;
-    const cat = ext ? categoryOf(ext) : undefined;
     if (!target || !ext) return;
 
     if (target === "svg") {
       optionsWrap.append(field("Threshold", optNumber("Threshold", 50, "0–100", 0, 100)));
+      return;
     }
-    if (target === "gif" && cat === "video") {
-      optionsWrap.append(
-        field("FPS", optNumber("FPS", 10, "1–60", 1, 60)),
-        field("Width", optNumber("Width", 480, "px, 16–10000", 16, 10000)),
-      );
-    }
-    if (
-      (cat === "video" && ["mp4", "webm", "mkv", "avi", "mov", "mpg"].includes(target)) ||
-      (cat === "gif" && target === "webm")
-    ) {
-      optionsWrap.append(field("CRF", optNumber("CRF", 23, "0–51, empty = default", 0, 51)));
-    }
-    if (cat === "audio" && categoryOf(target) === "audio") {
-      optionsWrap.append(field("Bitrate", optNumber("Bitrate", 192, "kbps, empty = default", 16, 320)));
-    }
+    // A single quality slider drives CRF / bitrate / GIF fps+width / JPEG quality.
+    const quality = optRange("Quality", DEFAULT_QUALITY);
+    optionsWrap.append(quality.wrap);
   }
 
   targetSelect.addEventListener("change", () => {
@@ -429,14 +453,8 @@ function buildConverter(main: El, state: AppState): { root: El } {
     };
     const threshold = num("Threshold");
     if (threshold !== undefined) opts.threshold = threshold;
-    const fps = num("FPS");
-    if (fps !== undefined) opts.fps = fps;
-    const width = num("Width");
-    if (width !== undefined) opts.width = width;
-    const crf = num("CRF");
-    if (crf !== undefined) opts.crf = crf;
-    const bitrate = num("Bitrate");
-    if (bitrate !== undefined) opts.bitrate = bitrate;
+    const quality = num("Quality");
+    if (quality !== undefined) opts.quality = quality;
     return opts;
   }
 
@@ -573,5 +591,124 @@ function buildPdf(main: El, state: AppState): { root: El } {
   }
 
   refreshPdf();
+  return { root };
+}
+
+function buildVideo(main: El, state: AppState): { root: El } {
+  const root = h("section", { class: "panel hidden" }, [
+    h("h2", {}, ["Video tools"]),
+    h("p", { class: "subtitle" }, [
+      "Trim and edit video locally with WebAssembly. Nothing is ever uploaded.",
+    ]),
+  ]);
+  main.append(root);
+
+  const toolSelect = h("select") as HTMLSelectElement;
+  for (const t of VIDEO_TOOLS) toolSelect.append(h("option", { value: t }, [VIDEO_TOOL_LABELS[t]]));
+  const hint = h("p", { class: "hint" });
+  root.append(h("div", { class: "row" }, [h("label", {}, ["Tool"]), toolSelect]));
+  root.append(hint);
+
+  const drop = dropZone(
+    "Drop a video here or click to choose",
+    "MP4, WebM, MKV, AVI, MOV, MPG — stays on your device",
+    (files) => {
+      const filtered = files.filter((f) => isVideoName(f.name));
+      state.video.files = state.video.files.concat(filtered);
+      refreshVideo();
+    },
+  );
+  root.append(drop);
+
+  const listWrap = h("div", { class: "hidden" });
+  root.append(listWrap);
+
+  const optionsWrap = h("div", { class: "row" });
+  root.append(optionsWrap);
+
+  const runBtn = h("button", { class: "btn btn-primary", type: "button" }, ["Run"]);
+  root.append(h("div", { class: "row" }, [runBtn]));
+
+  const status = new StatusBar(root);
+  const log = new LogView(root);
+  const results = new ResultList(root);
+
+  function refreshVideo(): void {
+    const { tool, files } = state.video;
+    hint.textContent = VIDEO_TOOL_HINTS[tool];
+
+    const entries: FileEntry[] = files.map((file) => ({ file, ext: fileExt(file) }));
+    listWrap.textContent = "";
+    listWrap.classList.toggle("hidden", entries.length === 0);
+    if (entries.length) {
+      listWrap.append(
+        fileList(entries, (i) => {
+          state.video.files.splice(i, 1);
+          refreshVideo();
+        }),
+      );
+    }
+
+    optionsWrap.textContent = "";
+    if (tool === "trim") {
+      const startInput = h("input", { type: "text", class: "opt", placeholder: "0" }) as HTMLInputElement;
+      startInput.dataset.opt = "start";
+      const durInput = h("input", { type: "text", class: "opt", placeholder: "e.g. 30" }) as HTMLInputElement;
+      durInput.dataset.opt = "duration";
+      optionsWrap.append(
+        field("Start (s or HH:MM:SS)", startInput),
+        field("Duration (s or HH:MM:SS)", durInput),
+      );
+    }
+
+    status.hide();
+    log.clear();
+    results.hide();
+  }
+
+  function collectVideoOptions(): { start: string; duration: string } {
+    const opt = (label: string): string => {
+      const input = optionsWrap.querySelector(`input[data-opt="${label}"]`) as HTMLInputElement | null;
+      return input ? input.value.trim() : "";
+    };
+    return { start: opt("start"), duration: opt("duration") };
+  }
+
+  toolSelect.addEventListener("change", () => {
+    state.video.tool = toolSelect.value as VideoTool;
+    state.video.files = [];
+    refreshVideo();
+  });
+
+  runBtn.addEventListener("click", () => void runVideo());
+
+  async function runVideo(): Promise<void> {
+    const { tool, files } = state.video;
+    if (files.length === 0) {
+      status.error("Add a video file first.");
+      return;
+    }
+    runBtn.disabled = true;
+    results.hide();
+    log.clear();
+    status.running("Working…");
+    try {
+      const o = collectVideoOptions();
+      const outputs = await runVideoTool(tool, files, {
+        start: o.start,
+        duration: o.duration,
+        onLog: (line) => log.dim(line),
+      });
+      status.ok(`Done — ${outputs.length} file${outputs.length > 1 ? "s" : ""} ready`);
+      results.show(outputs);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.err(msg);
+      status.error(`Failed: ${msg}`);
+    }
+    runBtn.disabled = false;
+  }
+
+  refreshVideo();
   return { root };
 }

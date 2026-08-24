@@ -224,6 +224,41 @@ def _resolve_output(src: str, target: str, opts: dict) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Quality: a single 1-100 slider mapped to sensible per-format encode params.
+# --------------------------------------------------------------------------- #
+
+DEFAULT_QUALITY = 80
+
+
+def _clamp_quality(value) -> int:
+    try:
+        q = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_QUALITY
+    return max(1, min(100, q))
+
+
+def quality_to_crf(value) -> int:
+    """Map quality (1-100) to an H.264/VP9 CRF (lower = better)."""
+    q = _clamp_quality(value)
+    return max(17, min(51, round(51 - 0.33 * q)))
+
+
+def quality_to_bitrate(value) -> int:
+    """Map quality (1-100) to an audio bitrate in kbit/s."""
+    q = _clamp_quality(value)
+    return max(64, min(320, round(64 + 2.56 * q)))
+
+
+def quality_to_gif(value) -> tuple[int, int]:
+    """Map quality (1-100) to (fps, width) for GIF output."""
+    q = _clamp_quality(value)
+    fps = max(1, min(30, round(5 + 0.25 * q)))
+    width = max(160, min(1280, round(360 + 4.8 * q)))
+    return fps, width
+
+
+# --------------------------------------------------------------------------- #
 # Image conversions
 # --------------------------------------------------------------------------- #
 
@@ -231,7 +266,12 @@ def _resolve_output(src: str, target: str, opts: dict) -> str:
 def _convert_image_raster(src, src_ext, out, opts):
     im = require_image_magick()
     inp = src + "[0]" if src_ext == "gif" else src
-    run([im, inp, out], opts.get("quiet"), timeout=600)
+    cmd = [im, inp]
+    target_ext = Path(out).suffix.lstrip(".").lower()
+    if target_ext in ("jpg", "webp"):
+        cmd += ["-quality", str(_clamp_quality(opts.get("quality")))]
+    cmd.append(out)
+    run(cmd, opts.get("quiet"), timeout=600)
 
 
 def _convert_to_svg(src, out, opts):
@@ -322,7 +362,7 @@ def _convert_svg_to_raster(src, out, opts):
 
 def _convert_gif_to_video(src, target, out, opts):
     ff = require_ffmpeg()
-    crf = int(opts.get("crf") or 31) if target == "webm" else None
+    crf = int(opts.get("crf") or quality_to_crf(opts.get("quality"))) if target == "webm" else None
     cmd = [ff, "-n", "-i", src]
     if target == "mp4":
         cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
@@ -342,8 +382,11 @@ def _convert_gif_to_video(src, target, out, opts):
 
 def _convert_video_to_gif(src, out, opts):
     ff = require_ffmpeg()
-    fps = int(opts.get("fps", 10))
-    width = int(opts.get("width", 480))
+    if opts.get("quality") is not None:
+        fps, width = quality_to_gif(opts["quality"])
+    else:
+        fps = int(opts.get("fps", 10))
+        width = int(opts.get("width", 480))
     if width < 16 or width > 10000:
         width = 480
     if fps < 1 or fps > 60:
@@ -369,6 +412,8 @@ def _convert_video(src, target, out, opts):
     ff = require_ffmpeg()
     codec = _VIDEO_CODECS[target]
     crf = opts.get("crf")
+    if crf is None and opts.get("quality") is not None:
+        crf = quality_to_crf(opts["quality"])
     cmd = [ff, "-n", "-i", src, "-c:v", codec["v"]]
     if crf is not None and codec["v"] in ("libx264", "libvpx-vp9"):
         cmd += ["-crf", str(int(crf))]
@@ -399,6 +444,8 @@ def _normalize_bitrate(value) -> str | None:
 def _convert_audio(src, target, out, opts):
     ff = require_ffmpeg()
     bitrate = _normalize_bitrate(opts.get("bitrate"))
+    if bitrate is None and opts.get("quality") is not None:
+        bitrate = f"{quality_to_bitrate(opts['quality'])}k"
     cmd = [ff, "-n", "-i", src, "-vn"]
     if target == "wav":
         cmd += ["-c:a", "pcm_s16le"]
@@ -425,4 +472,5 @@ __all__ = [
     "CATEGORY", "CATEGORY_LABELS",
     "canonical", "category_of", "is_supported", "valid_targets",
     "list_formats", "detect", "convert", "BackendError", "__version__",
+    "DEFAULT_QUALITY", "quality_to_crf", "quality_to_bitrate", "quality_to_gif",
 ]
