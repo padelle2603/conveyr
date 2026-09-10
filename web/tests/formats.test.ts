@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   RASTER,
   VECTOR,
@@ -123,7 +123,7 @@ describe("formats: MIME", () => {
 });
 
 describe("formats: detect", () => {
-  function fakeFile(bytes: Uint8Array, name: string): File {
+  function fakeFile(bytes: Uint8Array<ArrayBuffer>, name: string): File {
     return {
       name,
       slice: () =>
