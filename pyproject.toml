@@ -20,6 +20,9 @@ classifiers = [
     "Topic :: Multimedia :: Video :: Conversion",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
 [project.scripts]
 conveyr = "conveyr.cli:main"
 conveyr-gui = "conveyr.gui:main"
