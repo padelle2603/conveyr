@@ -15,12 +15,14 @@ APP_NAME="conveyr"
 VENV_DIR="${VENV_DIR:-$HOME/.local/share/conveyr/venv}"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 PURGE_DEPS=0
+VERBOSE=0
 
 for arg in "$@"; do
     case "$arg" in
         --purge-deps) PURGE_DEPS=1 ;;
+        --verbose) VERBOSE=1 ;;
         -h|--help)
-            echo "Usage: $0 [--purge-deps]"
+            echo "Usage: $0 [--purge-deps] [--verbose]"
             exit 0
             ;;
         *)
@@ -30,21 +32,25 @@ for arg in "$@"; do
     esac
 done
 
+_vlog()  { if [ "$VERBOSE" -eq 1 ]; then echo "$1"; fi; }
+
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
 apps_dir="$data_dir/applications"
 icon_dir="$data_dir/icons/hicolor"
 
-echo "[app] removing launchers from $BIN_DIR"
+echo "Conveyr - Uninstallation"
+
+_vlog "[app] removing launchers from $BIN_DIR"
 rm -f "$BIN_DIR/conveyr" "$BIN_DIR/conveyr-gui"
 
-echo "[app] removing virtual environment $VENV_DIR"
+_vlog "[app] removing virtual environment $VENV_DIR"
 rm -rf "$VENV_DIR"
 rmdir "$(dirname "$VENV_DIR")" 2>/dev/null || true
 
-echo "[app] removing desktop entry from $apps_dir"
+_vlog "[app] removing desktop entry from $apps_dir"
 rm -f "$apps_dir/$APP_NAME.desktop"
 
-echo "[app] removing icons from $icon_dir"
+_vlog "[app] removing icons from $icon_dir"
 rm -f "$icon_dir/scalable/apps/$APP_NAME.svg"
 for size in 16 22 24 32 48 64 128 256 512; do
     rm -f "$icon_dir/${size}x${size}/apps/$APP_NAME.png"
@@ -54,7 +60,7 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 if [ "$PURGE_DEPS" -eq 1 ]; then
-    echo "[deps] purging system packages"
+    _vlog "[deps] purging system packages"
     local sudo_cmd="sudo"
     if [ "$(id -u)" -eq 0 ]; then
         sudo_cmd=""
@@ -68,8 +74,10 @@ if [ "$PURGE_DEPS" -eq 1 ]; then
     elif command -v zypper >/dev/null 2>&1; then
         $sudo_cmd zypper remove -y ffmpeg imagemagick potrace librsvg2-tools poppler-tools ghostscript qpdf
     else
-        echo "[deps] unsupported package manager; remove packages manually" >&2
+        echo "!! unsupported package manager; remove packages manually" >&2
     fi
 fi
 
+echo ""
+echo "Removed: launchers, venv, desktop entry and icons."
 echo "Done. $APP_NAME has been removed."

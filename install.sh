@@ -17,12 +17,14 @@ APP_NAME="conveyr"
 VENV_DIR="${VENV_DIR:-$HOME/.local/share/conveyr/venv}"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 SKIP_DEPS=0
+VERBOSE=0
 
 for arg in "$@"; do
     case "$arg" in
         --skip-deps) SKIP_DEPS=1 ;;
+        --verbose) VERBOSE=1 ;;
         -h|--help)
-            echo "Usage: $0 [--skip-deps]"
+            echo "Usage: $0 [--skip-deps] [--verbose]"
             exit 0
             ;;
         *)
@@ -31,6 +33,9 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+_vlog()  { if [ "$VERBOSE" -eq 1 ]; then echo "$1"; fi; }
+_warn()  { echo "  ! $1" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -75,11 +80,12 @@ install_system_deps() {
     fi
 
     if [ "${#missing[@]}" -eq 0 ]; then
-        echo "[deps] all required tools are already installed"
+        _vlog "[deps] all required tools are already installed"
+        echo "[deps] OK"
         return 0
     fi
 
-    echo "[deps] installing: ${missing[*]} (via $pm)"
+    _vlog "[deps] installing: ${missing[*]} (via $pm)"
     case "$pm" in
         apt)
             $sudo_cmd apt-get update
@@ -95,7 +101,7 @@ install_system_deps() {
             $sudo_cmd zypper install -y ffmpeg imagemagick potrace python3 poppler-tools ghostscript qpdf
             ;;
         *)
-            echo "[deps] unsupported package manager; install ffmpeg, imagemagick, potrace, poppler-utils, ghostscript and qpdf manually" >&2
+            _warn "[deps] unsupported package manager; install ffmpeg, imagemagick, potrace, poppler-utils, ghostscript and qpdf manually"
             ;;
     esac
 
@@ -126,19 +132,28 @@ cleanup_legacy() {
 }
 
 install_python_app() {
-    echo "[app] creating virtual environment: $VENV_DIR"
+    _vlog "[app] creating virtual environment: $VENV_DIR"
     python3 -m venv "$VENV_DIR"
-    "$VENV_DIR/bin/python" -m pip install --upgrade pip >/dev/null
-    echo "[app] installing $APP_NAME"
-    "$VENV_DIR/bin/pip" install --no-cache-dir "$SCRIPT_DIR"
+    if [ "$VERBOSE" -eq 1 ]; then
+        "$VENV_DIR/bin/python" -m pip install --upgrade pip
+    else
+        "$VENV_DIR/bin/python" -m pip install --upgrade pip >/dev/null
+    fi
+    _vlog "[app] installing conveyr + dependencies into venv"
+    if [ "$VERBOSE" -eq 1 ]; then
+        "$VENV_DIR/bin/pip" install --no-cache-dir "$SCRIPT_DIR"
+    else
+        "$VENV_DIR/bin/pip" install --no-cache-dir "$SCRIPT_DIR" >/dev/null
+    fi
 
     mkdir -p "$BIN_DIR"
     ln -sf "$VENV_DIR/bin/conveyr"     "$BIN_DIR/conveyr"
     ln -sf "$VENV_DIR/bin/conveyr-gui" "$BIN_DIR/conveyr-gui"
 
-    echo "[app] created launchers in $BIN_DIR"
+    _vlog "[app] created launchers in $BIN_DIR"
+    echo "[app] OK"
     if ! echo ":$PATH:" | grep -q ":$BIN_DIR:"; then
-        echo "[app] note: add $BIN_DIR to your PATH, e.g.:"
+        _warn "add $BIN_DIR to your PATH, e.g.:"
         echo "  echo 'export PATH=\"\$PATH:$BIN_DIR\"' >> ~/.bashrc"
     fi
 
@@ -168,7 +183,7 @@ install_icons() {
         cp "$png" "$dest/$APP_NAME.png"
     done
 
-    echo "[icons] installed Conveyr icons into $icon_dir"
+    echo "[icons] OK"
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -f -t "$icon_dir" >/dev/null 2>&1 || true
     fi
@@ -194,7 +209,7 @@ Keywords=convert;converter;conveyr;image;video;audio;svg;png;jpg;mp3;mp4;pdf;mer
 StartupNotify=true
 EOF
 
-    echo "[app] created desktop entry: $desktop_file"
+    echo "[app] OK"
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database "$apps_dir" >/dev/null 2>&1 || true
     fi
@@ -217,7 +232,9 @@ main() {
     install_python_app
 
     echo
-    echo "Done. Try:"
+    echo "Installed: conveyr, conveyr-gui (launchers, venv, icons, desktop entry)."
+    echo
+    echo "Try:"
     echo "  conveyr --list-formats"
     echo "  conveyr photo.jpg --to png"
     echo "  conveyr-gui"
