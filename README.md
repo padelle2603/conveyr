@@ -92,3 +92,5 @@ Released under the **MIT License** — see [`LICENSE`](LICENSE).
 
 Please only convert content you have the rights to. Conveyr is fully offline
 and does not collect or transmit any data.
+
+*Developed with the assistance of [opencode](https://opencode.ai).*
