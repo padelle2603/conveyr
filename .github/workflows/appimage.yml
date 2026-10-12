@@ -28,6 +28,7 @@ jobs:
         run: |
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)"
           echo "CONVEYR_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "CONVEYR_APPIMAGE=Conveyr-v${version}-x86_64.AppImage" >> "$GITHUB_ENV"
           echo "building Conveyr-v${version}-x86_64.AppImage"
           if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
             echo "::error::tag ${GITHUB_REF_NAME} does not match pyproject.toml ${version}"
@@ -62,6 +63,15 @@ jobs:
           # 0 = current, 1 = no release yet / offline. The first release has
           # nothing to compare against, so 1 is the expected result here.
           ./"$IMG" --check-update || [ $? -eq 1 ]
+
+      # A workflow_dispatch run publishes nothing, so without this the only
+      # way to get the artifact out is to cut a release.
+      - name: Upload the AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: conveyr-appimage
+          path: ${{ env.CONVEYR_APPIMAGE }}
+          if-no-files-found: error
 
       - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/v')
