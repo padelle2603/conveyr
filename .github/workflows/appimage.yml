@@ -28,7 +28,7 @@ jobs:
         run: |
           version="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)"
           echo "CONVEYR_VERSION=${version}" >> "$GITHUB_ENV"
-          echo "building Conveyr-${version}-x86_64.AppImage"
+          echo "building Conveyr-v${version}-x86_64.AppImage"
           if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
             echo "::error::tag ${GITHUB_REF_NAME} does not match pyproject.toml ${version}"
             exit 1
@@ -52,7 +52,7 @@ jobs:
 
       - name: Smoke test
         run: |
-          IMG="Conveyr-${CONVEYR_VERSION}-x86_64.AppImage"
+          IMG="Conveyr-v${CONVEYR_VERSION}-x86_64.AppImage"
           test -f "$IMG"
           chmod +x "$IMG"
           ./"$IMG" --version

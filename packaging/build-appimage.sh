@@ -17,7 +17,7 @@ cd "$SCRIPT_DIR/.."
 VERSION="${1:-$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)}"
 ARCH="${ARCH:-x86_64}"
 APPDIR="${APPDIR:-AppDir}"
-OUT="Conveyr-${VERSION}-${ARCH}.AppImage"
+OUT="Conveyr-v${VERSION}-${ARCH}.AppImage"
 BUNDLE="${BUNDLE:-build/appimage}"
 
 command -v pyinstaller >/dev/null 2>&1 || { echo "pip install pyinstaller" >&2; exit 1; }
