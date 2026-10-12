@@ -22,6 +22,18 @@ jobs:
             desktop-file-utils file
           python3 -m pip install --break-system-packages pyinstaller
 
+      # pyproject.toml is canonical. workflow_dispatch has no tag, so taking
+      # the version from GITHUB_REF_NAME would produce Conveyr-main-*.AppImage.
+      - name: Version
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)"
+          echo "CONVEYR_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "building Conveyr-${version}-x86_64.AppImage"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match pyproject.toml ${version}"
+            exit 1
+          fi
+
       - name: Tests
         run: |
           python3 -m pip install --break-system-packages pytest
@@ -34,13 +46,14 @@ jobs:
           chmod +x /usr/local/bin/appimagetool
 
       - name: Build AppImage
-        run: ./packaging/build-appimage.sh "${GITHUB_REF_NAME#v}"
+        run: ./packaging/build-appimage.sh
         env:
           ARCH: x86_64
 
       - name: Smoke test
         run: |
-          IMG="$(ls Conveyr-*-x86_64.AppImage | head -1)"
+          IMG="Conveyr-${CONVEYR_VERSION}-x86_64.AppImage"
+          test -f "$IMG"
           chmod +x "$IMG"
           ./"$IMG" --version
           # 0 = all tools present, 1 = some missing. Both are fine here: the
@@ -51,6 +64,7 @@ jobs:
           ./"$IMG" --check-update || [ $? -eq 1 ]
 
       - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
