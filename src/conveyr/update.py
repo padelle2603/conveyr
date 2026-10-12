@@ -27,8 +27,17 @@ RELEASES_URL = "https://github.com/padelle2603/conveyr/releases"
 TIMEOUT = 5
 
 
-def latest_tag(timeout: int = TIMEOUT) -> str | None:
-    """Tag of the newest published release, or ``None`` if there is none.
+class UpdateError(RuntimeError):
+    """The release check could not be completed."""
+
+
+def latest_tag(timeout: int = TIMEOUT) -> str:
+    """Tag of the newest published release, or ``""`` if there is none.
+
+    Raises :class:`UpdateError` when the request itself fails. Callers that
+    must stay quiet (the GUI) catch it; ``--check-update`` reports it, because
+    an "offline" that is really a broken TLS bundle is not something a user
+    should have to guess at.
 
     A repository with zero releases answers ``302 -> /releases`` with no tag in
     the path. That is not an error, it just means there is nothing to offer.
@@ -41,14 +50,16 @@ def latest_tag(timeout: int = TIMEOUT) -> str | None:
             location = response.getheader("location")
         finally:
             conn.close()
-    except (OSError, http.client.HTTPException):
-        return None
+    except (OSError, http.client.HTTPException) as exc:
+        # ssl.SSLError is an OSError subclass, so a broken CA bundle lands
+        # here too. Keep the cause: it is the only clue there will ever be.
+        raise UpdateError(f"{type(exc).__name__}: {exc}") from exc
 
     if not location:
-        return None
+        return ""
     tag = location.rsplit("/", 1)[-1].strip()
     if not tag or tag in ("releases", "latest"):
-        return None
+        return ""
     return tag.lstrip("vV")
 
 
@@ -78,6 +89,9 @@ def remote_is_newer(local: str, remote: str) -> bool:
 
 
 def available_version(current: str, timeout: int = TIMEOUT) -> str | None:
-    """The version to offer, or ``None``. One request."""
-    remote = latest_tag(timeout)
+    """The version to offer, or ``None``. One request. Never raises."""
+    try:
+        remote = latest_tag(timeout)
+    except UpdateError:
+        return None
     return remote if remote and remote_is_newer(current, remote) else None

@@ -1,12 +1,34 @@
 import pytest
 
-from conveyr import __version__
 from conveyr.update import (
+    UpdateError,
     _tokens,
     available_version,
     latest_tag,
     remote_is_newer,
 )
+
+
+def _conn(location, status=302):
+    """Stand-in for an HTTPSConnection answering one redirect."""
+    class Response:
+        def getheader(self, name):
+            return location
+
+    class Conn:
+        def __init__(self, *a, **k):
+            pass
+
+        def request(self, *a, **k):
+            pass
+
+        def getresponse(self):
+            return Response()
+
+        def close(self):
+            pass
+
+    return Conn
 
 
 class TestTokens:
@@ -38,56 +60,46 @@ class TestRemoteIsNewer:
 
 
 class TestLatestTag:
-    def test_network_failure_is_silent(self, monkeypatch):
+    def test_network_failure_raises_with_the_cause(self, monkeypatch):
+        """A broken TLS bundle must not look like 'no release published'.
+
+        ssl.SSLError is an OSError subclass, so swallowing it here is how a
+        certifi-less AppImage used to report a healthy app as offline.
+        """
+        def boom(*a, **k):
+            raise OSError("certificate verify failed")
+
+        monkeypatch.setattr("conveyr.update.http.client.HTTPSConnection", boom)
+        with pytest.raises(UpdateError) as exc:
+            latest_tag()
+        assert "OSError" in str(exc.value)
+
+    def test_available_version_stays_silent(self, monkeypatch):
         def boom(*a, **k):
             raise OSError("offline")
 
         monkeypatch.setattr("conveyr.update.http.client.HTTPSConnection", boom)
-        assert latest_tag() is None
         assert available_version("1.0.0") is None
 
-    def test_no_release_returns_none(self, monkeypatch):
-        class Response:
-            status = 302
+    @pytest.mark.parametrize(
+        "location,expected",
+        [
+            (None, ""),
+            ("https://github.com/padelle2603/conveyr/releases", ""),
+            ("https://github.com/padelle2603/conveyr/releases/latest", ""),
+            ("https://github.com/padelle2603/conveyr/releases/tag/v1.4.2", "1.4.2"),
+        ],
+    )
+    def test_tag_extraction(self, monkeypatch, location, expected):
+        monkeypatch.setattr(
+            "conveyr.update.http.client.HTTPSConnection", _conn(location)
+        )
+        assert latest_tag() == expected
 
-            def getheader(self, name):
-                return "https://github.com/padelle2603/conveyr/releases"
-
-        class Conn:
-            def __init__(self, *a, **k):
-                pass
-
-            def request(self, *a, **k):
-                pass
-
-            def getresponse(self):
-                return Response()
-
-            def close(self):
-                pass
-
-        monkeypatch.setattr("conveyr.update.http.client.HTTPSConnection", Conn)
-        assert latest_tag() is None
-
-    def test_tag_is_extracted_and_stripped(self, monkeypatch):
-        class Response:
-            def getheader(self, name):
-                return "https://github.com/padelle2603/conveyr/releases/tag/v1.4.2"
-
-        class Conn:
-            def __init__(self, *a, **k):
-                pass
-
-            def request(self, *a, **k):
-                pass
-
-            def getresponse(self):
-                return Response()
-
-            def close(self):
-                pass
-
-        monkeypatch.setattr("conveyr.update.http.client.HTTPSConnection", Conn)
-        assert latest_tag() == "1.4.2"
-        assert available_version(__version__) == "1.4.2"
+    def test_offered_only_when_newer(self, monkeypatch):
+        monkeypatch.setattr(
+            "conveyr.update.http.client.HTTPSConnection",
+            _conn("https://github.com/padelle2603/conveyr/releases/tag/v1.4.2"),
+        )
+        assert available_version("1.0.0") == "1.4.2"
         assert available_version("99.0.0") is None

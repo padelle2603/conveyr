@@ -117,16 +117,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _check_update() -> int:
-    """One anonymous HEAD request. 0 current, 10 newer available, 1 offline."""
-    from .update import RELEASES_URL, latest_tag, remote_is_newer
+    """One anonymous HEAD request. 0 current, 10 newer available, 1 failure."""
+    from .update import RELEASES_URL, UpdateError, latest_tag, remote_is_newer
 
-    remote = latest_tag()
-    if remote is None:
-        print(f"conveyr {__version__}")
-        print("error: no release published on GitHub yet, or github.com is unreachable",
-              file=sys.stderr)
+    print(f"conveyr {__version__}")
+    try:
+        remote = latest_tag()
+    except UpdateError as exc:
+        print(f"error: release check failed ({exc})", file=sys.stderr)
         return 1
-    print(f"conveyr {__version__} (current)")
+    if not remote:
+        print("error: no release published on GitHub yet", file=sys.stderr)
+        return 1
     print(f"Latest release: v{remote}")
     print(f"{RELEASES_URL}/tag/v{remote}")
     return 10 if remote_is_newer(__version__, remote) else 0
