@@ -56,6 +56,16 @@ done
 cp packaging/conveyr.desktop "${APPDIR}/conveyr.desktop"
 cp README.md LEGAL.md PRIVACY.md "${APPDIR}/usr/share/doc/conveyr/"
 
+# The CA store ships with the app. The frozen libcrypto cannot be relied on to
+# find the host's: with it missing, TLS verification fails with "unable to get
+# local issuer certificate" and the release check reports itself as offline.
+# An AppImage that cannot verify TLS cannot check for updates.
+CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+[ -f "$CA_BUNDLE" ] || CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt
+[ -f "$CA_BUNDLE" ] || { echo "no CA bundle found; the AppImage would fail TLS" >&2; exit 1; }
+mkdir -p "${APPDIR}/usr/share/ca-certificates"
+cp "$CA_BUNDLE" "${APPDIR}/usr/share/ca-certificates/ca-certificates.crt"
+
 # appimagetool looks for the icon named in the desktop entry at the AppDir
 # root; the hicolor tree above is for anything that goes through the icon theme.
 cp assets/icons/conveyr_256x256.png "${APPDIR}/conveyr.png"
@@ -65,8 +75,11 @@ cat > "${APPDIR}/AppRun" <<'RUNNER'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
 export APPDIR="$HERE"
+export SSL_CERT_FILE="$HERE/usr/share/ca-certificates/ca-certificates.crt"
+export GIT_SSL_CAINFO="$SSL_CERT_FILE"
 exec "$HERE/usr/bin/conveyr" "$@"
 RUNNER
+
 chmod +x "${APPDIR}/AppRun" "${APPDIR}/usr/bin/conveyr"
 
 echo "==> Smoke test..."
