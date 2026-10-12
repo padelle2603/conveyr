@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Conveyr
+GenericName=File Converter
+Comment=Convert images, video and audio locally - no cloud, no servers
+Exec=conveyr-gui
+TryExec=conveyr-gui
+Icon=conveyr
+Terminal=false
+Categories=Utility;FileTools;
+Keywords=convert;converter;conveyr;image;video;audio;svg;png;jpg;mp3;mp4;pdf;merge;split;local;
+StartupNotify=true

@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import os
 import queue
+import shutil
+import subprocess
 import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
+from .backends import install_hint, missing_tools
 from .core import (
     convert,
     DEFAULT_QUALITY,
@@ -27,6 +30,7 @@ from .pdfgui import PdfToolsView
 from .videogui import VideoToolsView
 from .picker import pick_directory, pick_files
 from .theme import C, _FONT, _STATUS_STYLES, setup_theme
+from . import update
 
 _STATUS_STYLES = {
     "muted": "Muted.TLabel",
@@ -41,19 +45,48 @@ _EMPTY_STATE_TEXT = (
     "No uploads - everything stays on this machine."
 )
 
+# Terminal emulators that can run a one-shot command, best first. Tried in
+# order by the "Install" button when system tools are missing.
+_TERMINALS = (
+    ("x-terminal-emulator", ["-e"]),
+    ("gnome-terminal", ["--"]),
+    ("konsole", ["-e"]),
+    ("xfce4-terminal", ["-e"]),
+    ("alacritty", ["-e"]),
+    ("kitty", ["-e"]),
+    ("xterm", ["-e"]),
+)
+
 
 def _data_home() -> str:
     return os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+
+
+def _appdir() -> str:
+    """Mount point of the running AppImage, empty outside one."""
+    return os.environ.get("APPDIR", "")
 
 
 def _icon_path(size: int) -> str:
     return os.path.join(_data_home(), "icons", "hicolor", f"{size}x{size}", "apps", "conveyr.png")
 
 
-def _installed_icon_paths() -> list[str]:
-    """Locate the Conveyr icon installed by install.sh, best size first."""
-    sizes = (128, 64, 48, 32, 256)
-    return [_icon_path(size) for size in sizes]
+def _installed_icon_paths(sizes=(128, 64, 48, 32, 256)) -> list[str]:
+    """Locate the Conveyr icon, best size first.
+
+    Three sources, because each packaging method puts it somewhere else:
+    the icon theme (a system install), the AppImage mount ($APPDIR) and a
+    source checkout next to the package.
+    """
+    paths = [_icon_path(size) for size in sizes]
+
+    appdir = _appdir()
+    if appdir:
+        paths += [os.path.join(appdir, f"conveyr_{size}.png") for size in sizes]
+
+    assets = Path(__file__).resolve().parents[2] / "assets" / "icons"
+    paths += [str(assets / f"conveyr_{size}x{size}.png") for size in sizes]
+    return paths
 
 
 def _set_window_icon(root: tk.Tk) -> None:
@@ -89,6 +122,7 @@ class ConverterApp:
         self._update_list_state()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(100, self._poll_queue)
+        threading.Thread(target=self._check_update, daemon=True).start()
 
     # ------------------------------------------------------------------ UI --
     def _build_ui(self) -> None:
@@ -132,8 +166,60 @@ class ConverterApp:
 
         ttk.Separator(main, orient="horizontal").pack(fill=tk.X, pady=(0, 10))
 
+        # System tools are not bundled: the AppImage carries Python and
+        # Tkinter only, so ffmpeg/ghostscript/… still come from the distro.
+        # Say so up front instead of letting the first conversion fail.
+        self.deps_row = ttk.Frame(main)
+        self.deps_label = ttk.Label(self.deps_row, style="Warning.TLabel")
+        self.deps_install = ttk.Button(
+            self.deps_row, text="Install", style="Primary.TButton",
+            command=self._install_missing_tools,
+        )
+        self.deps_install.pack(side=tk.RIGHT)
+        self.deps_label.pack(side=tk.LEFT)
+        self.deps_row.pack_forget()
+        self._refresh_deps_row()
+
+    def _refresh_deps_row(self) -> None:
+        missing = missing_tools()
+        if not missing:
+            self.deps_row.pack_forget()
+            return
+        names = ", ".join(name for name, _binary, _purpose in missing[:3])
+        if len(missing) > 3:
+            names += f" +{len(missing) - 3} more"
+        self.deps_label.config(text=f"{len(missing)} tool(s) missing: {names}")
+        self.deps_row.pack(fill=tk.X, pady=(0, 10))
+
+    def _install_missing_tools(self) -> None:
+        command = install_hint()
+        opened = False
+        for terminal, argv in _TERMINALS:
+            if shutil.which(terminal) is None:
+                continue
+            try:
+                subprocess.Popen(
+                    [terminal, *argv, "bash", "-lc", f"{command}; echo; read -r -p 'Press Enter to close… '"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                opened = True
+                break
+            except OSError:
+                continue
+        if opened:
+            return
+        # No terminal we know about: put the command where it is copyable
+        # instead of failing silently.
+        self.root.clipboard_clear()
+        self.root.clipboard_append(command)
+        messagebox.showinfo(
+            "Conveyr",
+            f"No terminal emulator found.\n\nThe command was copied to the clipboard:\n\n{command}",
+        )
+
     def _load_logo(self) -> tk.PhotoImage | None:
-        for icon_path in (self._icon_path_32(), _icon_path(48), _icon_path(64)):
+        for icon_path in _installed_icon_paths((32, 48)):
             if os.path.isfile(icon_path):
                 try:
                     self._logo_img = tk.PhotoImage(file=icon_path)
@@ -141,10 +227,6 @@ class ConverterApp:
                 except tk.TclError:
                     continue
         return None
-
-    @staticmethod
-    def _icon_path_32() -> str:
-        return _icon_path(32)
 
     def _build_files(self, main: ttk.Frame) -> ttk.Labelframe:
         panel = ttk.Labelframe(main, text="Files", style="Panel.TLabelframe", padding=(10, 8))
@@ -440,6 +522,8 @@ class ConverterApp:
                 if item[0] == "log":
                     _kind, tag, text = item
                     self._append_log(tag, text)
+                elif item[0] == "update":
+                    self._show_update_window(item[1])
                 elif item[0] == "done":
                     _kind, converted, failed = item
                     self.busy = False
@@ -455,6 +539,63 @@ class ConverterApp:
         except queue.Empty:
             pass
         self.root.after(100, self._poll_queue)
+
+    # ------------------------------------------------------------- updates --
+    def _check_update(self) -> None:
+        """One anonymous HEAD request, off the UI thread, silent on failure."""
+        version = update.available_version(__version__)
+        if version:
+            self.queue.put(("update", version))
+
+    def _open_releases(self) -> None:
+        try:
+            subprocess.Popen(
+                ["xdg-open", update.RELEASES_URL],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError as exc:
+            messagebox.showerror("Conveyr", f"Could not open a browser:\n{exc}")
+
+    def _show_update_window(self, version: str) -> None:
+        """'Conveyr 1.2.0 is available'.
+
+        Download hands over to the browser: Conveyr never replaces its own
+        files. Not now just closes — nothing is remembered, so the check runs
+        again next launch.
+        """
+        win = tk.Toplevel(self.root)
+        win.title("Conveyr update")
+        win.transient(self.root)
+        win.resizable(False, False)
+
+        frame = ttk.Frame(win, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(frame, text=f"Conveyr {version} is available", style="Title.TLabel").pack(
+            anchor=tk.W
+        )
+        ttk.Label(
+            frame,
+            text=(
+                f"You are running {__version__}. Conveyr never updates itself — "
+                "download the new version and replace the AppImage or the "
+                "installed files."
+            ),
+            style="Muted.TLabel",
+            wraplength=400,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(8, 18))
+
+        buttons = ttk.Frame(frame)
+        buttons.pack(anchor=tk.E, fill=tk.X)
+        ttk.Button(buttons, text="Not now", command=win.destroy).pack(side=tk.LEFT)
+        ttk.Button(
+            buttons,
+            text="Download",
+            style="Primary.TButton",
+            command=self._open_releases,
+        ).pack(side=tk.RIGHT)
 
     def _set_status(self, text: str, kind: str = "muted") -> None:
         self.status.config(text=text, style=_STATUS_STYLES.get(kind, "Muted.TLabel"))

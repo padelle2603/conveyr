@@ -29,21 +29,37 @@ install. Source lives in `web/`.
 
 ## Install
 
-```bash
-./install.sh                    # detects distro, installs deps, sets up
-./install.sh --skip-deps        # if the system tools are already installed
-```
-
-This creates an isolated Python environment, adds `conveyr` / `conveyr-gui` to
-`~/.local/bin` and installs the icon set and desktop entry. Ensure
-`~/.local/bin` is on your PATH:
+Download the **AppImage** from [Releases](https://github.com/padelle2603/conveyr/releases):
 
 ```bash
-echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc && source ~/.bashrc
+chmod +x Conveyr-*-x86_64.AppImage
+./Conveyr-*-x86_64.AppImage
 ```
 
-To uninstall: `./uninstall.sh` (add `--purge-deps` to also remove the system
-packages).
+No installer, no `sudo`, no Python environment: the AppImage carries Python and
+Tkinter. To uninstall, delete the file.
+
+### The conversion tools
+
+The AppImage deliberately does **not** bundle ffmpeg, ImageMagick, potrace,
+ghostscript, qpdf, poppler or librsvg — those are distro packages. Conveyr
+tells you which ones are missing when it starts, and **Install** opens a
+terminal with the right command for your distribution.
+
+```bash
+./Conveyr-*.AppImage --check-deps      # list what is missing
+```
+
+<details><summary>Install them by hand</summary>
+
+| Distribution | Command |
+|---|---|
+| Debian, Ubuntu, Mint | `sudo apt install ffmpeg imagemagick potrace poppler-utils ghostscript qpdf librsvg2-bin` |
+| Fedora, RHEL, CentOS | `sudo dnf install ffmpeg-free imagemagick potrace poppler-utils ghostscript qpdf librsvg2-tools` |
+| Arch, CachyOS, Manjaro, EndeavourOS | `sudo pacman -S ffmpeg imagemagick potrace poppler ghostscript qpdf librsvg` |
+| openSUSE | `sudo zypper install ffmpeg imagemagick potrace poppler-tools ghostscript qpdf librsvg2-tools` |
+
+</details>
 
 ## Usage
 
@@ -53,6 +69,8 @@ conveyr *.jpg --to webp --out-dir converted/    # batch convert
 conveyr clip.mp4 --to gif --fps 12 --width 640  # video to GIF
 conveyr track.mp3 --to flac                     # audio
 conveyr --list-formats                          # all supported conversions
+conveyr --check-update                          # is a newer release out? 0=no 10=yes 1=offline
+conveyr --check-deps                            # which tools are missing
 ```
 
 PDF tools:
@@ -90,7 +108,8 @@ freezes. Only valid conversions are offered based on detected source formats.
 
 Released under the **MIT License** — see [`LICENSE`](LICENSE).
 
-Please only convert content you have the rights to. Conveyr is fully offline
-and does not collect or transmit any data.
+Please only convert content you have the rights to. Conveyr does not collect
+or transmit your data — the only network call is an anonymous check for a
+newer release. See [PRIVACY.md](PRIVACY.md) for exactly what it sends.
 
 *Developed with the assistance of [opencode](https://opencode.ai).*

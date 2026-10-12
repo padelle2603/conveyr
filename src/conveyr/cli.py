@@ -49,6 +49,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  conveyr sound.wav --to mp3 --bitrate 192\n"
             "  conveyr clip.mp4 --to webm --quality 90\n"
             "  conveyr *.jpg --to webp --quality 85 --out-dir converted/\n"
+            "  conveyr --check-deps\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -100,10 +101,49 @@ def _build_parser() -> argparse.ArgumentParser:
         "--list-formats", action="store_true", help="show all supported conversions and exit"
     )
     parser.add_argument(
+        "--check-update", action="store_true",
+        help="ask GitHub for the newest release and report it "
+             "(exit 0 current, 10 newer available, 1 offline)",
+    )
+    parser.add_argument(
+        "--check-deps", action="store_true",
+        help="report the missing system tools and how to install them",
+    )
+    parser.add_argument(
         "--version", action="version",
         version=f"%(prog)s {__version__}{BANNER}",
     )
     return parser
+
+
+def _check_update() -> int:
+    """One anonymous HEAD request. 0 current, 10 newer available, 1 offline."""
+    from .update import RELEASES_URL, latest_tag, remote_is_newer
+
+    remote = latest_tag()
+    if remote is None:
+        print(f"conveyr {__version__}")
+        print("error: no release published on GitHub yet, or github.com is unreachable",
+              file=sys.stderr)
+        return 1
+    print(f"conveyr {__version__} (current)")
+    print(f"Latest release: v{remote}")
+    print(f"{RELEASES_URL}/tag/v{remote}")
+    return 10 if remote_is_newer(__version__, remote) else 0
+
+
+def _check_deps() -> int:
+    from .backends import install_hint, missing_tools
+
+    missing = missing_tools()
+    if not missing:
+        print("All conversion tools are installed.")
+        return 0
+    print(f"{len(missing)} conversion tool(s) missing:\n")
+    for tool, binary, purpose in missing:
+        print(f"  {tool:<14} needs '{binary}' — {purpose}")
+    print(f"\nInstall them all with:\n  {install_hint()}")
+    return 1
 
 
 def _print_formats() -> None:
@@ -363,6 +403,12 @@ def main(argv=None) -> int:
     if args.list_formats:
         _print_formats()
         return 0
+
+    if args.check_update:
+        return _check_update()
+
+    if args.check_deps:
+        return _check_deps()
 
     if not args.files:
         parser.error("the following arguments are required: FILE")

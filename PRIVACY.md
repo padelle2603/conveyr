@@ -6,8 +6,9 @@ _Last updated: 16 August 2026_
 > version is the one published in this document.
 
 This policy describes how Conveyr handles data when you use it. The short
-answer is: **Conveyr is fully offline. It does not collect, store, or transmit
-your data. Your files never leave your device.**
+answer is: **Conveyr does not collect, store, or transmit your data. Your files
+never leave your device.** The one exception is an anonymous check for a newer
+release, described in section 4.
 
 ## 1. Where your data stays
 
@@ -49,9 +50,9 @@ Conveyr does **not** collect, store, index, cache or retain:
 Conveyr keeps **no persistent personal data**:
 
 - **Desktop**: no configuration file, no database, no logs, no cache of your
-  files. The only things written to your system are the output files you
-  request and the application itself (its virtual environment and launchers
-  under `~/.local` when installed via `install.sh`).
+  files, and nothing recorded about the release check. The only things written
+  to your system are the output files you request and the application itself
+  (the AppImage, kept wherever you downloaded it).
 - **Web**: the web build uses **no** `localStorage`, `sessionStorage` or
   `IndexedDB`. Nothing is stored between sessions.
 
@@ -60,10 +61,32 @@ Conveyr keeps **no persistent personal data**:
 Conveyr performs **no tracking, analytics, telemetry or advertising** of any
 kind.
 
-The **desktop** build has **no network code at all**: it makes no outgoing
-requests. The only external interaction is optional: the `install.sh` script
-may invoke the system package manager (apt/dnf/pacman/zypper) to install the
-conversion tools, which connects to your distribution's own repositories.
+### Desktop: exactly one request
+
+When the desktop GUI starts, it sends a single `HEAD` request to
+`https://github.com/padelle2603/conveyr/releases/latest` to find out whether a
+newer Conveyr exists. If one does, a small "Conveyr *n.m.p* is available"
+window appears; closing it, or pressing **Not now**, changes nothing.
+**Download** simply opens the release page in your browser — Conveyr never
+downloads or replaces anything by itself.
+
+That request carries no account, no token, no cookie and no body. It does not
+touch the GitHub API, so it spends none of the API rate limit shared with other
+applications on your IP. Its User-Agent is the single word `conveyr`: no
+version, no distribution, no hostname. Nothing is written to disk as a result
+and no timestamp is kept. `conveyr --check-update` runs the same request on
+demand (exit `0` current, `10` newer available, `1` unreachable or no release
+published yet).
+
+What GitHub necessarily sees, like any website you visit: your IP address and
+the request time.
+
+The conversion tools themselves are ordinary local programs. The optional
+**Install** button in the GUI — shown only when a tool is missing — opens a
+terminal with your distribution's own package manager (apt/dnf/pacman/zypper),
+which connects to your distribution's repositories and nowhere else.
+
+### Web
 
 The **web** build is a static site (hosted on GitHub Pages). The only network
 requests it makes are **same-origin fetches of the bundled engines** (the
@@ -77,9 +100,9 @@ call to a Conveyr server because no such server exists.
 Conveyr requests **no special permissions**:
 
 - **Desktop**: Conveyr reads and writes only the files you choose, and executes
-  the system conversion tools. The `install.sh` installer invokes `sudo` only
-  to install system packages if you opt in; the application itself never runs
-  with elevated privileges.
+  the system conversion tools. The optional **Install** button opens a terminal
+  with a package manager command you can see before running it; the
+  application itself never runs with elevated privileges.
 - **Web**: Conveyr uses the browser File API (`<input type=file>` and
   drag-and-drop). No other browser permission is requested.
 

@@ -93,6 +93,36 @@ def _find(*names: str):
     return None
 
 
+# (logical name, binary to look for, what it is needed for). Kept next to the
+# `find_*` helpers so adding a backend means touching one list, not two.
+_REQUIRED_TOOLS = (
+    ("ffmpeg", ("ffmpeg",), "audio and video conversion"),
+    ("ImageMagick", ("magick", "convert"), "image conversion"),
+    ("potrace", ("potrace",), "raster-to-SVG tracing"),
+    ("ghostscript", ("gs",), "PDF compression"),
+    ("qpdf", ("qpdf",), "PDF rotation and password protection"),
+    ("poppler", ("pdftoppm",), "PDF-to-image conversion"),
+    ("pdfseparate", ("pdfseparate",), "PDF splitting"),
+    ("pdfunite", ("pdfunite",), "PDF merging"),
+    ("pdftotext", ("pdftotext",), "PDF text extraction"),
+    ("librsvg", ("rsvg-convert",), "SVG rasterisation (optional)"),
+)
+
+
+def missing_tools() -> list[tuple[str, str, str]]:
+    """Tools Conveyr needs that are not on PATH, as (name, binary, purpose).
+
+    Used by ``conveyr --check-deps`` and by the GUI status row, so a user who
+    grabbed the AppImage on a bare machine finds out what to install before
+    hitting a conversion error.
+    """
+    return [
+        (name, binaries[0], purpose)
+        for name, binaries, purpose in _REQUIRED_TOOLS
+        if _find(*binaries) is None
+    ]
+
+
 def find_image_magick():
     """ImageMagick 7 ships `magick`; v6 ships `convert`."""
     return _find("magick", "convert")

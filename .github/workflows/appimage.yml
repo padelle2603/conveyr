@@ -1,0 +1,60 @@
+name: AppImage
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python and Tk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 python3-tk python3-venv python3-pip \
+            desktop-file-utils file
+          python3 -m pip install --break-system-packages pyinstaller
+
+      - name: Tests
+        run: |
+          python3 -m pip install --break-system-packages pytest
+          PYTHONPATH=src python3 -m pytest tests/ -q
+
+      - name: appimagetool
+        run: |
+          curl -sSfL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /usr/local/bin/appimagetool
+
+      - name: Build AppImage
+        run: ./packaging/build-appimage.sh "${GITHUB_REF_NAME#v}"
+        env:
+          ARCH: x86_64
+
+      - name: Smoke test
+        run: |
+          IMG="$(ls Conveyr-*-x86_64.AppImage | head -1)"
+          chmod +x "$IMG"
+          ./"$IMG" --version
+          # 0 = all tools present, 1 = some missing. Both are fine here: the
+          # runner may or may not ship ffmpeg and we are not testing that.
+          ./"$IMG" --check-deps || [ $? -eq 1 ]
+          # 0 = current, 1 = no release yet / offline. The first release has
+          # nothing to compare against, so 1 is the expected result here.
+          ./"$IMG" --check-update || [ $? -eq 1 ]
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            Conveyr-*-x86_64.AppImage \
+            --title "Conveyr $GITHUB_REF_NAME" \
+            --generate-notes

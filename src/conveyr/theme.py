@@ -69,6 +69,7 @@ def setup_theme(root: tk.Tk) -> None:
     style.configure("Success.TLabel", background=C["surface"], foreground=C["success"])
     style.configure("Error.TLabel", background=C["surface"], foreground=C["error"])
     style.configure("Info.TLabel", background=C["surface"], foreground=C["info"])
+    style.configure("Warning.TLabel", background=C["surface"], foreground=C["warning"])
 
     style.configure(
         "Panel.TLabelframe",
