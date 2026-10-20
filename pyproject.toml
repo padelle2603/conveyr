@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "conveyr"
-version = "1.0.1"
+version = "1.0.2"
 description = "Conveyr - local file converter for images, video and audio on Linux. No cloud, no servers."
 readme = "README.md"
 requires-python = ">=3.9"
