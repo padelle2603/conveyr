@@ -75,6 +75,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "-q", "--quiet", action="store_true", help="suppress progress output"
     )
     parser.add_argument(
+        "--progress", action="store_true",
+        help="show a minimal standalone progress window during conversion (auto-closes on success)",
+    )
+    parser.add_argument(
         "--crf", type=int, default=None,
         help="video quality for H.264/VP9 encodes, lower is better (default 23)",
     )
@@ -429,6 +433,24 @@ def main(argv=None) -> int:
 
     if args.out_dir:
         Path(args.out_dir).mkdir(parents=True, exist_ok=True)
+
+    opts = {
+        "output": args.output if len(args.files) == 1 else None,
+        "out_dir": args.out_dir,
+        "force": args.force,
+        "quiet": args.quiet,
+        "crf": args.crf,
+        "bitrate": args.bitrate,
+        "fps": args.fps,
+        "width": args.width,
+        "threshold": args.threshold,
+        "quality": args.quality,
+    }
+
+    if args.progress:
+        from .fm_progress import has_display, run_with_progress
+        if has_display():
+            return run_with_progress(args.files, target, opts)
 
     failures = 0
     for file in args.files:

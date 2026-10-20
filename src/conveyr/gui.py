@@ -123,6 +123,8 @@ class ConverterApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(100, self._poll_queue)
         threading.Thread(target=self._check_update, daemon=True).start()
+        from .menus import auto_install
+        threading.Thread(target=auto_install, daemon=True).start()
 
     # ------------------------------------------------------------------ UI --
     def _build_ui(self) -> None:

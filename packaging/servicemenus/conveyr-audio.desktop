@@ -1,0 +1,41 @@
+[Desktop Entry]
+Type=Service
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=audio/x-wav;audio/mpeg;audio/flac;audio/ogg;audio/mp4;audio/opus;audio/aac;
+Actions=toMp3;toWav;toFlac;toOgg;toM4a;
+X-KDE-Submenu=Convert Audio
+X-KDE-Submenu[it]=Converti audio
+X-KDE-Priority=TopLevel
+X-KDE-Protocols=file
+X-KDE-MinNumberOfUrls=1
+Icon=conveyr
+
+[Desktop Action toMp3]
+Name=Convert to MP3
+Name[it]=Converti in MP3
+Icon=conveyr
+Exec=conveyr %F --progress --to mp3
+
+[Desktop Action toWav]
+Name=Convert to WAV
+Name[it]=Converti in WAV
+Icon=conveyr
+Exec=conveyr %F --progress --to wav
+
+[Desktop Action toFlac]
+Name=Convert to FLAC
+Name[it]=Converti in FLAC
+Icon=conveyr
+Exec=conveyr %F --progress --to flac
+
+[Desktop Action toOgg]
+Name=Convert to OGG
+Name[it]=Converti in OGG
+Icon=conveyr
+Exec=conveyr %F --progress --to ogg
+
+[Desktop Action toM4a]
+Name=Convert to M4A
+Name[it]=Converti in M4A
+Icon=conveyr
+Exec=conveyr %F --progress --to m4a

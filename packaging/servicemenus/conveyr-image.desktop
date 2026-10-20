@@ -1,0 +1,41 @@
+[Desktop Entry]
+Type=Service
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=image/jpeg;image/png;image/webp;image/bmp;image/tiff;image/svg+xml;image/gif;
+Actions=toPng;toJpg;toWebp;toSvg;toGif;
+X-KDE-Submenu=Convert Image
+X-KDE-Submenu[it]=Converti immagine
+X-KDE-Priority=TopLevel
+X-KDE-Protocols=file
+X-KDE-MinNumberOfUrls=1
+Icon=conveyr
+
+[Desktop Action toPng]
+Name=Convert to PNG
+Name[it]=Converti in PNG
+Icon=conveyr
+Exec=conveyr %F --progress --to png
+
+[Desktop Action toJpg]
+Name=Convert to JPG
+Name[it]=Converti in JPG
+Icon=conveyr
+Exec=conveyr %F --progress --to jpg
+
+[Desktop Action toWebp]
+Name=Convert to WebP
+Name[it]=Converti in WebP
+Icon=conveyr
+Exec=conveyr %F --progress --to webp
+
+[Desktop Action toSvg]
+Name=Convert to SVG (trace)
+Name[it]=Converti in SVG (vettorizza)
+Icon=conveyr
+Exec=conveyr %F --progress --to svg
+
+[Desktop Action toGif]
+Name=Convert to GIF
+Name[it]=Converti in GIF
+Icon=conveyr
+Exec=conveyr %F --progress --to gif

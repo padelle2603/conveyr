@@ -1,0 +1,35 @@
+[Desktop Entry]
+Type=Service
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=video/mp4;video/webm;video/x-matroska;video/x-msvideo;video/quicktime;video/mpeg;image/gif;
+Actions=toMp4;toWebm;toGif;toMkv;
+X-KDE-Submenu=Convert Video
+X-KDE-Submenu[it]=Converti video
+X-KDE-Priority=TopLevel
+X-KDE-Protocols=file
+X-KDE-MinNumberOfUrls=1
+Icon=conveyr
+
+[Desktop Action toMp4]
+Name=Convert to MP4
+Name[it]=Converti in MP4
+Icon=conveyr
+Exec=conveyr %F --progress --to mp4
+
+[Desktop Action toWebm]
+Name=Convert to WebM
+Name[it]=Converti in WebM
+Icon=conveyr
+Exec=conveyr %F --progress --to webm
+
+[Desktop Action toGif]
+Name=Convert to Animated GIF
+Name[it]=Converti in GIF animata
+Icon=conveyr
+Exec=conveyr %F --progress --to gif
+
+[Desktop Action toMkv]
+Name=Convert to MKV
+Name[it]=Converti in MKV
+Icon=conveyr
+Exec=conveyr %F --progress --to mkv

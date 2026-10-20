@@ -32,9 +32,12 @@ pyinstaller \
     --specpath "${BUNDLE}" \
     --paths src \
     --add-data "$(pwd)/assets/icons:assets/icons" \
+    --add-data "$(pwd)/packaging/servicemenus:packaging/servicemenus" \
     --hidden-import conveyr.gui \
     --hidden-import conveyr.pdfgui \
     --hidden-import conveyr.videogui \
+    --hidden-import conveyr.fm_progress \
+    --hidden-import conveyr.menus \
     packaging/appimage_entry.py
 
 echo "==> Assembling ${APPDIR}..."
@@ -54,6 +57,8 @@ for size in 32 48 64 128 256; do
     cp "assets/icons/conveyr_${size}x${size}.png" "${APPDIR}/conveyr_${size}.png"
 done
 cp packaging/conveyr.desktop "${APPDIR}/conveyr.desktop"
+mkdir -p "${APPDIR}/usr/share/kio/servicemenus"
+cp packaging/servicemenus/*.desktop "${APPDIR}/usr/share/kio/servicemenus/"
 cp README.md LEGAL.md PRIVACY.md "${APPDIR}/usr/share/doc/conveyr/"
 
 # The CA store ships with the app. The frozen libcrypto cannot be relied on to

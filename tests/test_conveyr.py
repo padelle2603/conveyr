@@ -98,3 +98,28 @@ class TestPdfModule:
     def test_image_formats(self):
         assert "png" in IMAGE_FORMATS
         assert "jpg" in IMAGE_FORMATS
+
+
+class TestMenusModule:
+    def test_quote_exec(self):
+        from conveyr.menus import _quote_exec
+        assert _quote_exec("/plain/path") == "/plain/path"
+        assert _quote_exec("/path with/spaces") == '"/path with/spaces"'
+        assert _quote_exec('/path"quote') == '"/path\\"quote"'
+
+    def test_rewrite(self):
+        from conveyr.menus import _rewrite
+        template = "Exec=conveyr %F --progress --to png\nIcon=conveyr\n"
+        rewritten = _rewrite(template, "/my/AppImage", "/my/icon.png")
+        assert "Exec=/my/AppImage %F --progress --to png" in rewritten
+        assert "Icon=/my/icon.png" in rewritten
+
+    def test_read_templates(self):
+        from conveyr.menus import _read_templates
+        templates = _read_templates()
+        assert len(templates) == 3
+        names = [name for name, _ in templates]
+        assert "conveyr-image.desktop" in names
+        assert "conveyr-video.desktop" in names
+        assert "conveyr-audio.desktop" in names
+
