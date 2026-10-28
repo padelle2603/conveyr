@@ -8,6 +8,8 @@ PDFs directly on your machine using `ffmpeg`, ImageMagick, `potrace`,
 Works on Debian/Ubuntu, Fedora/RHEL, Arch (and CachyOS, Manjaro, EndeavourOS)
 and openSUSE.
 
+![Conveyr](img/conveyr.png)
+
 ## Web version
 
 A fully in-browser version (WebAssembly) runs at
